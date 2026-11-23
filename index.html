@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>Generator animacji tras (GPX + OSM)</title>
   <style>
     :root {
@@ -186,9 +187,11 @@
         </label>
         <label class="field">Mapa:
           <select id="inMapStyle">
-            <option value="cyclosm" selected>CyclOSM (Rowerowa)</option>
+            <option value="osm" selected>OpenStreetMap</option>
+            <option value="osm_de">OpenStreetMap (DE)</option>
+            <option value="cyclosm">CyclOSM (Rowerowa)</option>
             <option value="opentopo">OpenTopoMap</option>
-            <option value="esri_topo">Topo (ArcGIS / CORS)</option>
+            <option value="esri_topo">Topo (ArcGIS)</option>
             <option value="esri_street">Uliczna (ArcGIS)</option>
             <option value="esri_sat">Satelita (Esri)</option>
           </select>
@@ -266,6 +269,18 @@
     };
 
     const MAP_PROVIDERS = {
+      osm: {
+        name: 'OpenStreetMap',
+        attr: '© OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
+      },
+      osm_de: {
+        name: 'OpenStreetMap (DE)',
+        attr: '© OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://a.tile.openstreetmap.de/${z}/${x}/${y}.png`
+      },
       cyclosm: {
         name: 'CyclOSM',
         attr: '© OpenStreetMap contributors • CyclOSM',
@@ -325,6 +340,29 @@
     bikeLayer.width = 150;
     bikeLayer.height = 150;
     const bikeCtx = bikeLayer.getContext('2d');
+
+    const tileCheckCanvas = document.createElement('canvas');
+    tileCheckCanvas.width = 256;
+    tileCheckCanvas.height = 256;
+    const tileCheckCtx = tileCheckCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Wykrywa podmieniony przez serwer OSM obrazek "403 Access blocked" (żółto-czarny pas ostrzegawczy po lewej)
+    function isOsmBlockedTile(img) {
+      try {
+        tileCheckCtx.clearRect(0, 0, 256, 256);
+        tileCheckCtx.drawImage(img, 0, 0);
+        const d = tileCheckCtx.getImageData(8, 20, 1, 210).data;
+        let yellow = 0, black = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          if (r > 240 && g > 240 && b < 20) yellow++;
+          else if (r < 20 && g < 20 && b < 20) black++;
+        }
+        return yellow >= 35 && black >= 35;
+      } catch {
+        return false;
+      }
+    }
 
     function lonToWorldX(lon) {
       return (lon + 180) / 360;
@@ -597,7 +635,15 @@
       };
     }
 
-    // --- Ładowanie kafelków mapy z obsługą CORS i automatycznym fallbackiem ---
+    // --- Ładowanie kafelków mapy (GitHub Pages -> OpenStreetMap; bez Referer -> automatyczny fallback na OSM DE) ---
+    function triggerMapFallback(reason) {
+      if (fallbackTriggered) return;
+      fallbackTriggered = true;
+      inMapStyle.value = 'osm_de';
+      statusText.textContent = reason;
+      preloadTiles();
+    }
+
     function requestTile(styleKey, z, tx, ty) {
       const maxTile = 1 << z;
       if (ty < 0 || ty >= maxTile) return null;
@@ -612,8 +658,14 @@
       entry.promise = new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        img.referrerPolicy = 'no-referrer-when-downgrade';
+        img.referrerPolicy = 'strict-origin-when-cross-origin';
         img.onload = () => {
+          if (styleKey === 'osm' && isOsmBlockedTile(img)) {
+            entry.status = 'error';
+            triggerMapFallback('Brak nagłówka Referer (np. podgląd lokalny) — przełączono na OpenStreetMap (DE).');
+            resolve(entry);
+            return;
+          }
           entry.img = img;
           entry.status = 'ok';
           resolve(entry);
@@ -621,10 +673,10 @@
         img.onerror = () => {
           entry.status = 'error';
           failedTileCount++;
-          if (!fallbackTriggered && !styleKey.startsWith('esri_') && failedTileCount >= 3) {
-            fallbackTriggered = true;
+          if (!fallbackTriggered && styleKey === 'osm' && failedTileCount >= 2) {
+            triggerMapFallback('Serwer OSM odrzucił żądanie — przełączono automatycznie na OpenStreetMap (DE).');
+          } else if (styleKey === 'osm_de' && failedTileCount >= 3) {
             inMapStyle.value = 'esri_topo';
-            statusText.textContent = 'Serwer kafelków zablokował dostęp — przełączono automatycznie na podkład Topo (ArcGIS).';
             preloadTiles();
           }
           resolve(entry);
@@ -699,7 +751,6 @@
       return { wx, wy, ele, km, angle, idx: hi };
     }
 
-    // Zawsze kamera "Cała trasa"
     function getCameraAtTime(globalT) {
       const intro = Math.min(1, globalT / 0.15);
       const outro = Math.max(0, (globalT - 0.88) / 0.12);
@@ -734,7 +785,6 @@
       tCtx.arc(9.5, 5.5, 6.2, 0, Math.PI * 2);
       tCtx.stroke();
 
-      // Torba gravelowa w ramie
       tCtx.fillStyle = '#fb923c';
       tCtx.beginPath();
       tCtx.moveTo(-4.8, -3.5);
@@ -880,7 +930,6 @@
         }
       }
 
-      // Pełny ślad w tle
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -895,7 +944,6 @@
       ctx.stroke();
       ctx.restore();
 
-      // Animowany świecący ślad
       const cur = getPointAtProgress(rideT);
       if (rideT > 0) {
         ctx.save();
@@ -923,7 +971,6 @@
         ctx.restore();
       }
 
-      // POI (<wpt>)
       for (const poi of activePOIs) {
         const sp = worldToScreen(poi.wx, poi.wy);
         ctx.save();
@@ -937,7 +984,6 @@
         ctx.restore();
       }
 
-      // Piny Start / Meta
       const pulse = (elapsedMs % 1500) / 1500;
       const startSp = worldToScreen(activePts[0].wx, activePts[0].wy);
       const endSp = worldToScreen(activePts[activePts.length - 1].wx, activePts[activePts.length - 1].wy);
@@ -949,13 +995,11 @@
         drawPin(startSp.x, startSp.y, unitSize, pulse, null, '#991b1b', '#f87171', palette);
       }
 
-      // Rower nad linią
       const bikeSp = worldToScreen(cur.wx, cur.wy);
       const facingRight = Math.cos(cur.angle) >= 0;
       const bob = (rideT > 0 && rideT < 1) ? Math.sin(elapsedMs * 0.025) * 1.4 : 0;
       drawMovingBike(bikeSp.x, bikeSp.y, unitSize, palette, facingRight, bob, getBikeAlpha(rideT));
 
-      // Atrybucja mapy
       ctx.save();
       ctx.font = `600 ${Math.round(unitSize * 0.0075)}px Inter, system-ui, sans-serif`;
       const attrW = ctx.measureText(provider.attr).width + 14;
@@ -967,7 +1011,6 @@
 
       ctx.restore();
 
-      // Profil wysokości
       if (hasElevation && elevH > 0) {
         const py0 = mapH;
         ctx.save();
@@ -1222,6 +1265,7 @@
 
     inMapStyle.addEventListener('change', () => {
       failedTileCount = 0;
+      fallbackTriggered = false;
       if (activePts.length) {
         computeOverviewCamera();
         preloadTiles();
