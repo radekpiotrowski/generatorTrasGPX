@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generator animacji tras (GPX + OSM)</title>
+  <style>
+    :root {
+      --bg: #0b1311;
+      --panel: #13201c;
+      --accent: #f97316;
+      --text: #f3f7f5;
+      --muted: #94a8a0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #162822 0%, var(--bg) 70%);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px;
+      gap: 14px;
+    }
+    .toolbar {
+      width: 100%;
+      max-width: 1260px;
+      background: rgba(19, 32, 28, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      backdrop-filter: blur(10px);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .title { display: flex; flex-direction: column; gap: 2px; }
+    .title strong { font-size: 16px; }
+    .status { font-size: 12px; color: var(--muted); }
+
+    .controls, .inputs, .tracks-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .tracks-bar:empty { display: none; }
+    .track-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+    }
+    .track-chip input { accent-color: #f97316; }
+
+    label.field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 5px 10px;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    label.field input, label.field select {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+    }
+    label.field input[type="number"] { width: 70px; }
+    label.field input[type="text"] { width: 160px; }
+    label.field select option { background: #13201c; color: var(--text); }
+
+    button.action, .file-btn {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #1d302a;
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+    button.action:hover:not(:disabled), .file-btn:hover { background: #264038; transform: translateY(-1px); }
+    button.primary {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border-color: #fb923c;
+      color: #fff;
+    }
+    button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #fb923c, #f97316); }
+    button:disabled { opacity: 0.42; cursor: not-allowed; transform: none; }
+    input[type="file"] { display: none; }
+
+    .stage-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 1260px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      background: #0f1916;
+      display: flex;
+      justify-content: center;
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 76vh;
+      width: auto;
+      height: auto;
+    }
+    .drop-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(11, 19, 17, 0.88);
+      text-align: center;
+      padding: 24px;
+      cursor: pointer;
+      transition: opacity 0.25s ease;
+    }
+    .drop-overlay.hidden { opacity: 0; pointer-events: none; }
+    .drop-box {
+      border: 2px dashed rgba(249, 115, 22, 0.65);
+      border-radius: 18px;
+      padding: 40px 48px;
+      max-width: 560px;
+      background: rgba(249, 115, 22, 0.07);
+    }
+    .drop-box h2 { margin: 0 0 8px; font-size: 21px; }
+    .drop-box p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <div class="row">
+      <div class="title">
+        <strong>Generator animacji tras (GPX + OSM)</strong>
+        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx (przeciągnij tutaj lub kliknij „1. Wgraj GPX”).</span>
+      </div>
+      <div class="controls">
+        <label class="file-btn" for="fileInput">1. Wgraj GPX</label>
+        <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
+
+        <button class="action" id="flipBtn" title="Odwróć kierunek trasy" disabled>⇄ Odwróć</button>
+        <button class="action primary" id="recordBtn" disabled>2. Generuj video</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="inputs">
+        <label class="field">Nazwa:
+          <input id="inTitle" type="text" value="MOJA TRASA" />
+        </label>
+        <label class="field">Dystans (km):
+          <input id="inKm" type="number" step="0.1" min="0.1" value="0" />
+        </label>
+        <label class="field">W górę (m):
+          <input id="inGain" type="number" step="1" min="0" value="0" />
+        </label>
+        <label class="field">Mapa:
+          <select id="inMapStyle">
+            <option value="cyclosm" selected>CyclOSM (Rowerowa)</option>
+            <option value="opentopo">OpenTopoMap</option>
+            <option value="esri_topo">Topo (ArcGIS / CORS)</option>
+            <option value="esri_street">Uliczna (ArcGIS)</option>
+            <option value="esri_sat">Satelita (Esri)</option>
+          </select>
+        </label>
+        <label class="field">Format:
+          <select id="inAspect">
+            <option value="1600x900" selected>16:9 (Poziom)</option>
+            <option value="1080x1920">9:16 (Reels / Shorts)</option>
+            <option value="1080x1080">1:1 (Kwadrat)</option>
+          </select>
+        </label>
+        <label class="field">Kolor animacji:
+          <select id="inColor">
+            <option value="orange" selected>Pomarańczowy</option>
+            <option value="purple">Fioletowy</option>
+            <option value="blue">Niebieski</option>
+            <option value="green">Zielony</option>
+            <option value="red">Czerwony</option>
+            <option value="yellow">Żółty</option>
+            <option value="teal">Turkusowy</option>
+          </select>
+        </label>
+        <label class="field">Czas:
+          <select id="inDuration">
+            <option value="6000">6 s</option>
+            <option value="9000" selected>9 s</option>
+            <option value="12000">12 s</option>
+            <option value="15000">15 s</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="tracks-bar" id="tracksBar"></div>
+  </div>
+
+  <div class="stage-wrap" id="dropZone">
+    <canvas id="canvas" width="1600" height="900"></canvas>
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-box">
+        <h2>1. Wrzuć plik .gpx</h2>
+        <p>Przeciągnij tutaj plik <b>.gpx</b> wyeksportowany z Veloplannera, Stravy lub Garmina.<br>Po wgraniu zobaczysz ślad na mapie, a przycisk <b>„2. Generuj video”</b> zapisze gotowy film.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+    const dropOverlay = document.getElementById('dropOverlay');
+    const tracksBar = document.getElementById('tracksBar');
+
+    const flipBtn = document.getElementById('flipBtn');
+    const recordBtn = document.getElementById('recordBtn');
+    const statusText = document.getElementById('statusText');
+
+    const inTitle = document.getElementById('inTitle');
+    const inKm = document.getElementById('inKm');
+    const inGain = document.getElementById('inGain');
+    const inMapStyle = document.getElementById('inMapStyle');
+    const inAspect = document.getElementById('inAspect');
+    const inColor = document.getElementById('inColor');
+    const inDuration = document.getElementById('inDuration');
+
+    const PALETTES = {
+      orange: { hex: '#f97316', core: '#ffdfba' },
+      purple: { hex: '#a855f7', core: '#f3e8ff' },
+      blue:   { hex: '#3b82f6', core: '#dbeafe' },
+      green:  { hex: '#22c55e', core: '#dcfce7' },
+      red:    { hex: '#ef4444', core: '#fecaca' },
+      yellow: { hex: '#eab308', core: '#fef9c3' },
+      teal:   { hex: '#14b8a6', core: '#ccfbf1' }
+    };
+
+    const MAP_PROVIDERS = {
+      cyclosm: {
+        name: 'CyclOSM',
+        attr: '© OpenStreetMap contributors • CyclOSM',
+        maxZ: 18,
+        url: (z, x, y) => `https://a.tile-cyclosm.openstreetmap.fr/cyclosm/${z}/${x}/${y}.png`
+      },
+      opentopo: {
+        name: 'OpenTopoMap',
+        attr: '© OpenStreetMap contributors • OpenTopoMap',
+        maxZ: 17,
+        url: (z, x, y) => `https://a.tile.opentopomap.org/${z}/${x}/${y}.png`
+      },
+      esri_topo: {
+        name: 'Esri Topo',
+        attr: 'Tiles © Esri & OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`
+      },
+      esri_street: {
+        name: 'Esri Street',
+        attr: 'Tiles © Esri & OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`
+      },
+      esri_sat: {
+        name: 'Esri Satelita',
+        attr: 'Tiles © Esri',
+        maxZ: 18,
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+      }
+    };
+
+    // Stan GPX i trasy
+    let gpxTracks = [];
+    let gpxWaypoints = [];
+    let activePts = [];
+    let activePOIs = [];
+    let hasElevation = false;
+    let totalKm = 0;
+    let totalGain = 0;
+    let minEle = 0;
+    let maxEle = 100;
+    let isLoopRoute = false;
+
+    // Stan mapy i kamery
+    let overviewCam = { wx: 0.5, wy: 0.5, z: 6 };
+    const tileCache = new Map();
+    let failedTileCount = 0;
+    let fallbackTriggered = false;
+
+    // Stan animacji
+    let startTime = null;
+    let rafId = null;
+    let isRecording = false;
+
+    const bikeLayer = document.createElement('canvas');
+    bikeLayer.width = 150;
+    bikeLayer.height = 150;
+    const bikeCtx = bikeLayer.getContext('2d');
+
+    function lonToWorldX(lon) {
+      return (lon + 180) / 360;
+    }
+
+    function latToWorldY(lat) {
+      const clamped = Math.max(-85.0511, Math.min(85.0511, lat));
+      const rad = clamped * Math.PI / 180;
+      return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2;
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // --- Parser GPX ---
+    function parseGPX(xmlText, fileName) {
+      const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+      const parserErr = doc.querySelector('parsererror');
+      if (parserErr) throw new Error('Nieprawidłowy plik GPX.');
+
+      const metaName = doc.querySelector('metadata > name')?.textContent?.trim();
+      const tracks = [];
+
+      doc.querySelectorAll('trk').forEach((trk, idx) => {
+        const tName = trk.querySelector('name')?.textContent?.trim() || `Etap ${idx + 1}`;
+        const pts = [];
+        trk.querySelectorAll('trkpt').forEach((pt) => {
+          const lat = parseFloat(pt.getAttribute('lat'));
+          const lon = parseFloat(pt.getAttribute('lon'));
+          const eleEl = pt.querySelector('ele');
+          const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+          if (!isNaN(lat) && !isNaN(lon)) {
+            pts.push({ lat, lon, ele: (ele !== null && !isNaN(ele)) ? ele : null });
+          }
+        });
+        if (pts.length >= 2) tracks.push({ name: tName, pts, enabled: true });
+      });
+
+      if (tracks.length === 0) {
+        doc.querySelectorAll('rte').forEach((rte, idx) => {
+          const tName = rte.querySelector('name')?.textContent?.trim() || `Trasa ${idx + 1}`;
+          const pts = [];
+          rte.querySelectorAll('rtept').forEach((pt) => {
+            const lat = parseFloat(pt.getAttribute('lat'));
+            const lon = parseFloat(pt.getAttribute('lon'));
+            const eleEl = pt.querySelector('ele');
+            const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+            if (!isNaN(lat) && !isNaN(lon)) {
+              pts.push({ lat, lon, ele: (ele !== null && !isNaN(ele)) ? ele : null });
+            }
+          });
+          if (pts.length >= 2) tracks.push({ name: tName, pts, enabled: true });
+        });
+      }
+
+      if (tracks.length === 0) throw new Error('Nie znaleziono punktów trasy (<trkpt> ani <rtept>) w pliku GPX.');
+
+      const wpts = [];
+      doc.querySelectorAll('wpt').forEach((wpt) => {
+        const lat = parseFloat(wpt.getAttribute('lat'));
+        const lon = parseFloat(wpt.getAttribute('lon'));
+        const wName = wpt.querySelector('name')?.textContent?.trim() || 'POI';
+        const eleEl = wpt.querySelector('ele');
+        const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+        if (!isNaN(lat) && !isNaN(lon)) wpts.push({ name: wName, lat, lon, ele });
+      });
+
+      gpxTracks = tracks;
+      gpxWaypoints = wpts;
+
+      const cleanTitle = metaName || (tracks.length === 1 ? tracks[0].name : fileName.replace(/\.gpx$/i, ''));
+      inTitle.value = cleanTitle;
+
+      renderTrackChips();
+      rebuildFromSelectedTracks();
+    }
+
+    function renderTrackChips() {
+      tracksBar.innerHTML = '';
+      if (gpxTracks.length <= 1) return;
+      gpxTracks.forEach((trk) => {
+        const lbl = document.createElement('label');
+        lbl.className = 'track-chip';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = trk.enabled;
+        cb.addEventListener('change', () => {
+          trk.enabled = cb.checked;
+          if (!gpxTracks.some((t) => t.enabled)) {
+            trk.enabled = true;
+            cb.checked = true;
+          }
+          rebuildFromSelectedTracks();
+        });
+        lbl.appendChild(cb);
+        lbl.appendChild(document.createTextNode(`${trk.name} (${trk.pts.length} pkt)`));
+        tracksBar.appendChild(lbl);
+      });
+    }
+
+    function rebuildFromSelectedTracks() {
+      let combined = [];
+      for (const trk of gpxTracks) {
+        if (!trk.enabled) continue;
+        for (const p of trk.pts) {
+          combined.push({ ...p });
+        }
+      }
+      if (combined.length < 2) return;
+
+      if (combined.length > 3500) {
+        const step = Math.ceil(combined.length / 3500);
+        const sampled = [];
+        for (let i = 0; i < combined.length - 1; i += step) sampled.push(combined[i]);
+        sampled.push(combined[combined.length - 1]);
+        combined = sampled;
+      }
+
+      processActivePoints(combined);
+    }
+
+    function processActivePoints(rawPts) {
+      hasElevation = rawPts.some((p) => p.ele !== null);
+
+      let cumKm = 0;
+      const pts = rawPts.map((p, i) => {
+        if (i > 0) {
+          cumKm += haversineKm(rawPts[i - 1].lat, rawPts[i - 1].lon, p.lat, p.lon);
+        }
+        return {
+          lat: p.lat,
+          lon: p.lon,
+          wx: lonToWorldX(p.lon),
+          wy: latToWorldY(p.lat),
+          ele: p.ele,
+          smoothEle: p.ele,
+          km: cumKm,
+          progress: 0
+        };
+      });
+
+      totalKm = Math.max(0.01, cumKm);
+      for (const p of pts) p.progress = p.km / totalKm;
+
+      totalGain = 0;
+      minEle = 0;
+      maxEle = 100;
+      if (hasElevation) {
+        let lastE = pts.find((p) => p.ele !== null)?.ele ?? 0;
+        for (const p of pts) {
+          if (p.ele === null) p.ele = lastE;
+          else lastE = p.ele;
+        }
+        for (let i = 0; i < pts.length; i++) {
+          let sum = 0, cnt = 0;
+          for (let k = -2; k <= 2; k++) {
+            const idx = Math.max(0, Math.min(pts.length - 1, i + k));
+            sum += pts[idx].ele;
+            cnt++;
+          }
+          pts[i].smoothEle = sum / cnt;
+        }
+        minEle = Infinity;
+        maxEle = -Infinity;
+        let refEle = pts[0].smoothEle;
+        const threshold = 2.5;
+        for (const p of pts) {
+          if (p.smoothEle < minEle) minEle = p.smoothEle;
+          if (p.smoothEle > maxEle) maxEle = p.smoothEle;
+          const diff = p.smoothEle - refEle;
+          if (diff >= threshold) {
+            totalGain += diff;
+            refEle = p.smoothEle;
+          } else if (diff <= -threshold) {
+            refEle = p.smoothEle;
+          }
+        }
+      }
+
+      const gapKm = haversineKm(pts[0].lat, pts[0].lon, pts[pts.length - 1].lat, pts[pts.length - 1].lon);
+      isLoopRoute = gapKm < Math.max(0.4, totalKm * 0.025);
+
+      activePts = pts;
+      inKm.value = totalKm.toFixed(1);
+      inGain.value = Math.round(totalGain);
+
+      activePOIs = [];
+      const maxPoiDistKm = Math.max(1.5, totalKm * 0.04);
+      for (const w of gpxWaypoints) {
+        let bestIdx = 0, bestDist = Infinity;
+        for (let i = 0; i < pts.length; i++) {
+          const d = haversineKm(w.lat, w.lon, pts[i].lat, pts[i].lon);
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        if (bestDist <= maxPoiDistKm) {
+          activePOIs.push({
+            name: w.name,
+            wx: lonToWorldX(w.lon),
+            wy: latToWorldY(w.lat),
+            progress: pts[bestIdx].progress,
+            km: pts[bestIdx].km,
+            ele: w.ele !== null ? w.ele : pts[bestIdx].smoothEle
+          });
+        }
+      }
+
+      computeOverviewCamera();
+      preloadTiles();
+      updateStatusLine();
+      startAnimation();
+    }
+
+    function reverseRouteOrder() {
+      if (activePts.length < 2) return;
+      const rev = [...activePts].reverse();
+      let cumKm = 0;
+      for (let i = 0; i < rev.length; i++) {
+        if (i > 0) cumKm += haversineKm(rev[i - 1].lat, rev[i - 1].lon, rev[i].lat, rev[i].lon);
+        rev[i].km = cumKm;
+        rev[i].progress = cumKm / totalKm;
+      }
+      activePts = rev;
+      for (const poi of activePOIs) {
+        let bestIdx = 0, bestDist = Infinity;
+        for (let i = 0; i < activePts.length; i++) {
+          const d = (poi.wx - activePts[i].wx) ** 2 + (poi.wy - activePts[i].wy) ** 2;
+          if (d < bestDist) { bestDist = d; bestIdx = i; }
+        }
+        poi.progress = activePts[bestIdx].progress;
+        poi.km = activePts[bestIdx].km;
+      }
+      startAnimation();
+    }
+
+    function getMapViewport() {
+      const W = canvas.width;
+      const H = canvas.height;
+      const elevH = hasElevation ? Math.round(H * 0.20) : 0;
+      return { W, H, mapW: W, mapH: H - elevH, elevH };
+    }
+
+    function computeOverviewCamera() {
+      if (!activePts.length) return;
+      let minWx = Infinity, maxWx = -Infinity, minWy = Infinity, maxWy = -Infinity;
+      for (const p of activePts) {
+        if (p.wx < minWx) minWx = p.wx;
+        if (p.wx > maxWx) maxWx = p.wx;
+        if (p.wy < minWy) minWy = p.wy;
+        if (p.wy > maxWy) maxWy = p.wy;
+      }
+      const { mapW, mapH } = getMapViewport();
+      const spanX = Math.max(1e-5, maxWx - minWx);
+      const spanY = Math.max(1e-5, maxWy - minWy);
+
+      const zx = Math.log2((mapW * 0.78) / (spanX * 256));
+      const zy = Math.log2((mapH * 0.76) / (spanY * 256));
+      const maxZ = MAP_PROVIDERS[inMapStyle.value].maxZ;
+      const z = Math.max(2, Math.min(maxZ - 1, Math.min(zx, zy)));
+
+      overviewCam = {
+        wx: (minWx + maxWx) / 2,
+        wy: (minWy + maxWy) / 2,
+        z
+      };
+    }
+
+    // --- Ładowanie kafelków mapy z obsługą CORS i automatycznym fallbackiem ---
+    function requestTile(styleKey, z, tx, ty) {
+      const maxTile = 1 << z;
+      if (ty < 0 || ty >= maxTile) return null;
+      const wx = ((tx % maxTile) + maxTile) % maxTile;
+      const key = `${styleKey}/${z}/${wx}/${ty}`;
+
+      const existing = tileCache.get(key);
+      if (existing) return existing;
+
+      const provider = MAP_PROVIDERS[styleKey];
+      const entry = { img: null, status: 'loading', promise: null };
+      entry.promise = new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.referrerPolicy = 'no-referrer-when-downgrade';
+        img.onload = () => {
+          entry.img = img;
+          entry.status = 'ok';
+          resolve(entry);
+        };
+        img.onerror = () => {
+          entry.status = 'error';
+          failedTileCount++;
+          if (!fallbackTriggered && !styleKey.startsWith('esri_') && failedTileCount >= 3) {
+            fallbackTriggered = true;
+            inMapStyle.value = 'esri_topo';
+            statusText.textContent = 'Serwer kafelków zablokował dostęp — przełączono automatycznie na podkład Topo (ArcGIS).';
+            preloadTiles();
+          }
+          resolve(entry);
+        };
+        img.src = provider.url(z, wx, ty);
+      });
+
+      tileCache.set(key, entry);
+      return entry;
+    }
+
+    function getVisibleTilesForCamera(cam, mapW, mapH) {
+      const styleKey = inMapStyle.value;
+      const maxZ = MAP_PROVIDERS[styleKey].maxZ;
+      const tileZ = Math.max(2, Math.min(maxZ, Math.round(cam.z)));
+      const nTiles = 1 << tileZ;
+      const pxScale = Math.pow(2, cam.z) * 256;
+
+      const halfWx = (mapW / 2) / pxScale;
+      const halfWy = (mapH / 2) / pxScale;
+      const tx0 = Math.floor((cam.wx - halfWx) * nTiles) - 1;
+      const tx1 = Math.floor((cam.wx + halfWx) * nTiles) + 1;
+      const ty0 = Math.max(0, Math.floor((cam.wy - halfWy) * nTiles) - 1);
+      const ty1 = Math.min(nTiles - 1, Math.floor((cam.wy + halfWy) * nTiles) + 1);
+
+      const list = [];
+      for (let ty = ty0; ty <= ty1; ty++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
+          list.push({ styleKey, tileZ, tx, ty });
+        }
+      }
+      return list;
+    }
+
+    async function preloadTiles() {
+      if (!activePts.length) return [];
+      const { mapW, mapH } = getMapViewport();
+      const promises = [];
+
+      for (const t of getVisibleTilesForCamera(overviewCam, mapW, mapH)) {
+        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty);
+        if (entry && entry.status === 'loading') promises.push(entry.promise);
+      }
+      return Promise.all(promises);
+    }
+
+    function easeInOutCubic(x) {
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function getPointAtProgress(t) {
+      if (activePts.length < 2) return { wx: 0.5, wy: 0.5, ele: 0, km: 0, angle: 0, idx: 0 };
+      const pTarget = Math.max(0, Math.min(1, t));
+      let lo = 0, hi = activePts.length - 1;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (activePts[mid].progress <= pTarget) lo = mid;
+        else hi = mid;
+      }
+      const a = activePts[lo], b = activePts[hi];
+      const span = (b.progress - a.progress) || 1;
+      const f = (pTarget - a.progress) / span;
+      const wx = a.wx + (b.wx - a.wx) * f;
+      const wy = a.wy + (b.wy - a.wy) * f;
+      const ele = (a.smoothEle ?? 0) + ((b.smoothEle ?? 0) - (a.smoothEle ?? 0)) * f;
+      const km = a.km + (b.km - a.km) * f;
+
+      const bIdx = Math.max(0, lo - 3);
+      const fIdx = Math.min(activePts.length - 1, hi + 3);
+      const angle = Math.atan2(activePts[fIdx].wy - activePts[bIdx].wy, activePts[fIdx].wx - activePts[bIdx].wx);
+      return { wx, wy, ele, km, angle, idx: hi };
+    }
+
+    // Zawsze kamera "Cała trasa"
+    function getCameraAtTime(globalT) {
+      const intro = Math.min(1, globalT / 0.15);
+      const outro = Math.max(0, (globalT - 0.88) / 0.12);
+      const zBoost = easeInOutCubic(intro) * 0.12 - easeInOutCubic(outro) * 0.12;
+      return { wx: overviewCam.wx, wy: overviewCam.wy, z: overviewCam.z + zBoost };
+    }
+
+    function getBikeAlpha(rideT) {
+      if (rideT <= 0.08) return 0.50;
+      if (rideT < 0.18) return lerp(0.50, 1.00, easeInOutCubic((rideT - 0.08) / 0.10));
+      if (rideT <= 0.82) return 1.00;
+      if (rideT < 0.92) return lerp(1.00, 0.50, easeInOutCubic((rideT - 0.82) / 0.10));
+      return 0.50;
+    }
+
+    function drawBikeIconOn(tCtx, cx, cy, size, facingRight = true, bob = 0) {
+      tCtx.save();
+      tCtx.translate(cx, cy + bob);
+      if (!facingRight) tCtx.scale(-1, 1);
+
+      const s = size / 32;
+      tCtx.scale(s, s);
+      tCtx.lineCap = 'round';
+      tCtx.lineJoin = 'round';
+
+      tCtx.strokeStyle = '#ffffff';
+      tCtx.lineWidth = 2.6;
+      tCtx.beginPath();
+      tCtx.arc(-9.5, 5.5, 6.2, 0, Math.PI * 2);
+      tCtx.stroke();
+      tCtx.beginPath();
+      tCtx.arc(9.5, 5.5, 6.2, 0, Math.PI * 2);
+      tCtx.stroke();
+
+      // Torba gravelowa w ramie
+      tCtx.fillStyle = '#fb923c';
+      tCtx.beginPath();
+      tCtx.moveTo(-4.8, -3.5);
+      tCtx.lineTo(4.2, -3.5);
+      tCtx.lineTo(1.5, 1.5);
+      tCtx.lineTo(-3.2, 0.5);
+      tCtx.closePath();
+      tCtx.fill();
+
+      tCtx.strokeStyle = '#ffffff';
+      tCtx.lineWidth = 2.3;
+      tCtx.beginPath();
+      tCtx.moveTo(-9.5, 5.5);
+      tCtx.lineTo(-1.2, 5.5);
+      tCtx.lineTo(5.6, -4.2);
+      tCtx.lineTo(-5.0, -4.2);
+      tCtx.closePath();
+      tCtx.moveTo(-1.2, 5.5);
+      tCtx.lineTo(-5.6, -6.8);
+      tCtx.moveTo(9.5, 5.5);
+      tCtx.lineTo(5.2, -6.2);
+      tCtx.stroke();
+
+      tCtx.lineWidth = 2.6;
+      tCtx.beginPath();
+      tCtx.moveTo(-7.6, -7.2);
+      tCtx.lineTo(-3.8, -7.2);
+      tCtx.stroke();
+
+      tCtx.lineWidth = 2.2;
+      tCtx.beginPath();
+      tCtx.moveTo(5.2, -6.2);
+      tCtx.lineTo(7.4, -6.4);
+      tCtx.arc(7.4, -4.1, 2.3, -Math.PI / 2, Math.PI / 2, false);
+      tCtx.lineTo(6.2, -1.8);
+      tCtx.stroke();
+
+      tCtx.restore();
+    }
+
+    function drawMovingBike(bx, by, unitSize, palette, facingRight, bob, alpha) {
+      const r = unitSize * 0.0155;
+      const half = bikeLayer.width / 2;
+
+      bikeCtx.clearRect(0, 0, bikeLayer.width, bikeLayer.height);
+      bikeCtx.save();
+      bikeCtx.fillStyle = palette.hex;
+      bikeCtx.strokeStyle = '#ffffff';
+      bikeCtx.lineWidth = 2.5;
+      bikeCtx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+      bikeCtx.shadowBlur = 10;
+      bikeCtx.beginPath();
+      bikeCtx.arc(half, half, r, 0, Math.PI * 2);
+      bikeCtx.fill();
+      bikeCtx.shadowBlur = 0;
+      bikeCtx.stroke();
+      drawBikeIconOn(bikeCtx, half, half, r * 1.4, facingRight, bob);
+      bikeCtx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(bikeLayer, bx - half, by - half);
+      ctx.restore();
+    }
+
+    function drawPin(x, y, unitSize, pulsePhase, label, bgColor, borderColor, palette) {
+      const r = unitSize * 0.013;
+      const ringR = r * (1.2 + 0.55 * pulsePhase);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = `${palette.hex}99`;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = borderColor;
+      ctx.stroke();
+
+      if (label) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `800 ${Math.round(r * 0.9)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y + 1);
+      }
+      ctx.restore();
+    }
+
+    function renderFrame(elapsedMs) {
+      const { W, H, mapW, mapH, elevH } = getMapViewport();
+      const unitSize = Math.max(W, H);
+      const palette = PALETTES[inColor.value] || PALETTES.orange;
+      const dur = parseInt(inDuration.value, 10) || 9000;
+      const globalT = Math.min(1, elapsedMs / dur);
+      const rideT = Math.max(0, Math.min(1, (globalT - 0.10) / 0.80));
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#111b18';
+      ctx.fillRect(0, 0, W, H);
+
+      if (!activePts.length) return;
+
+      const cam = getCameraAtTime(globalT);
+      const styleKey = inMapStyle.value;
+      const provider = MAP_PROVIDERS[styleKey];
+      const tileZ = Math.max(2, Math.min(provider.maxZ, Math.round(cam.z)));
+      const nTiles = 1 << tileZ;
+      const pxScale = Math.pow(2, cam.z) * 256;
+      const tileScreenSize = Math.pow(2, cam.z - tileZ) * 256;
+
+      const worldToScreen = (wx, wy) => ({
+        x: mapW / 2 + (wx - cam.wx) * pxScale,
+        y: mapH / 2 + (wy - cam.wy) * pxScale
+      });
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, mapW, mapH);
+      ctx.clip();
+
+      const tiles = getVisibleTilesForCamera(cam, mapW, mapH);
+      for (const t of tiles) {
+        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty);
+        const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
+        const sy = mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
+        if (entry && entry.status === 'ok' && entry.img) {
+          ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+        } else {
+          ctx.fillStyle = '#182622';
+          ctx.fillRect(sx, sy, tileScreenSize + 0.5, tileScreenSize + 0.5);
+          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+          ctx.strokeRect(sx, sy, tileScreenSize, tileScreenSize);
+        }
+      }
+
+      // Pełny ślad w tle
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = `${palette.hex}44`;
+      ctx.lineWidth = unitSize * 0.0052;
+      ctx.beginPath();
+      activePts.forEach((p, i) => {
+        const sp = worldToScreen(p.wx, p.wy);
+        if (i === 0) ctx.moveTo(sp.x, sp.y);
+        else ctx.lineTo(sp.x, sp.y);
+      });
+      ctx.stroke();
+      ctx.restore();
+
+      // Animowany świecący ślad
+      const cur = getPointAtProgress(rideT);
+      if (rideT > 0) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = palette.hex;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = palette.hex;
+        ctx.lineWidth = unitSize * 0.0038;
+        ctx.beginPath();
+        const p0 = worldToScreen(activePts[0].wx, activePts[0].wy);
+        ctx.moveTo(p0.x, p0.y);
+        for (let i = 1; i < cur.idx; i++) {
+          const sp = worldToScreen(activePts[i].wx, activePts[i].wy);
+          ctx.lineTo(sp.x, sp.y);
+        }
+        const curSp = worldToScreen(cur.wx, cur.wy);
+        ctx.lineTo(curSp.x, curSp.y);
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = palette.core;
+        ctx.lineWidth = unitSize * 0.0014;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // POI (<wpt>)
+      for (const poi of activePOIs) {
+        const sp = worldToScreen(poi.wx, poi.wy);
+        ctx.save();
+        ctx.fillStyle = '#0284c7';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, unitSize * 0.0065, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Piny Start / Meta
+      const pulse = (elapsedMs % 1500) / 1500;
+      const startSp = worldToScreen(activePts[0].wx, activePts[0].wy);
+      const endSp = worldToScreen(activePts[activePts.length - 1].wx, activePts[activePts.length - 1].wy);
+
+      if (!isLoopRoute) {
+        drawPin(startSp.x, startSp.y, unitSize, pulse, 'A', '#15803d', '#4ade80', palette);
+        drawPin(endSp.x, endSp.y, unitSize, pulse, 'B', '#991b1b', '#f87171', palette);
+      } else {
+        drawPin(startSp.x, startSp.y, unitSize, pulse, null, '#991b1b', '#f87171', palette);
+      }
+
+      // Rower nad linią
+      const bikeSp = worldToScreen(cur.wx, cur.wy);
+      const facingRight = Math.cos(cur.angle) >= 0;
+      const bob = (rideT > 0 && rideT < 1) ? Math.sin(elapsedMs * 0.025) * 1.4 : 0;
+      drawMovingBike(bikeSp.x, bikeSp.y, unitSize, palette, facingRight, bob, getBikeAlpha(rideT));
+
+      // Atrybucja mapy
+      ctx.save();
+      ctx.font = `600 ${Math.round(unitSize * 0.0075)}px Inter, system-ui, sans-serif`;
+      const attrW = ctx.measureText(provider.attr).width + 14;
+      ctx.fillStyle = 'rgba(255,255,255,0.78)';
+      ctx.fillRect(mapW - attrW, mapH - 20, attrW, 20);
+      ctx.fillStyle = '#111827';
+      ctx.fillText(provider.attr, mapW - attrW + 7, mapH - 6);
+      ctx.restore();
+
+      ctx.restore();
+
+      // Profil wysokości
+      if (hasElevation && elevH > 0) {
+        const py0 = mapH;
+        ctx.save();
+        ctx.fillStyle = '#0d1714';
+        ctx.fillRect(0, py0, W, elevH);
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, py0);
+        ctx.lineTo(W, py0);
+        ctx.stroke();
+
+        const padL = W * 0.055;
+        const padR = W * 0.025;
+        const padT = elevH * 0.16;
+        const padB = elevH * 0.18;
+        const plotW = W - padL - padR;
+        const plotH = elevH - padT - padB;
+        const plotY0 = py0 + padT;
+        const plotY1 = py0 + padT + plotH;
+
+        const step = Math.max(10, Math.ceil((maxEle - minEle) / 4 / 25) * 25);
+        const yMinTick = Math.max(0, Math.floor(minEle / step) * step);
+        const yMaxTick = Math.max(yMinTick + step, Math.ceil(maxEle / step) * step);
+
+        const eleToY = (e) => plotY1 - ((e - yMinTick) / (yMaxTick - yMinTick)) * plotH;
+        const progToX = (p) => padL + p * plotW;
+
+        ctx.font = `600 ${Math.round(unitSize * 0.0072)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let v = yMinTick; v <= yMaxTick; v += step) {
+          const gy = eleToY(v);
+          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          ctx.beginPath();
+          ctx.moveTo(padL, gy);
+          ctx.lineTo(W - padR, gy);
+          ctx.stroke();
+          ctx.fillStyle = '#94a8a0';
+          ctx.fillText(`${v}m`, padL - 8, gy);
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(progToX(0), plotY1);
+        activePts.forEach((p) => ctx.lineTo(progToX(p.progress), eleToY(p.smoothEle)));
+        ctx.lineTo(progToX(1), plotY1);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
+        ctx.fill();
+
+        ctx.beginPath();
+        activePts.forEach((p, i) => {
+          const x = progToX(p.progress), y = eleToY(p.smoothEle);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+
+        const curX = progToX(rideT);
+        const curY = eleToY(cur.ele);
+        if (rideT > 0) {
+          const grad = ctx.createLinearGradient(0, plotY0, 0, plotY1);
+          grad.addColorStop(0, `${palette.hex}75`);
+          grad.addColorStop(1, `${palette.hex}12`);
+
+          ctx.beginPath();
+          ctx.moveTo(progToX(0), plotY1);
+          for (let i = 0; i < cur.idx; i++) {
+            ctx.lineTo(progToX(activePts[i].progress), eleToY(activePts[i].smoothEle));
+          }
+          ctx.lineTo(curX, curY);
+          ctx.lineTo(curX, plotY1);
+          ctx.closePath();
+          ctx.fillStyle = grad;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(progToX(0), eleToY(activePts[0].smoothEle));
+          for (let i = 1; i < cur.idx; i++) {
+            ctx.lineTo(progToX(activePts[i].progress), eleToY(activePts[i].smoothEle));
+          }
+          ctx.lineTo(curX, curY);
+          ctx.strokeStyle = palette.hex;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+
+        for (const poi of activePOIs) {
+          const px = progToX(poi.progress);
+          const py = eleToY(poi.ele);
+          ctx.fillStyle = '#0284c7';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = palette.hex;
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(curX, plotY0);
+        ctx.lineTo(curX, plotY1);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = palette.hex;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(curX, curY, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a8a0';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        const shownKmTotal = parseFloat(inKm.value) || totalKm;
+        for (let k = 0; k <= 4; k++) {
+          const frac = k / 4;
+          ctx.fillText(`${(frac * shownKmTotal).toFixed(shownKmTotal >= 20 ? 0 : 1)} km`, progToX(frac), plotY1 + 6);
+        }
+
+        ctx.restore();
+      }
+
+      drawHUD(W, H, unitSize, rideT, globalT, cur.ele, palette);
+    }
+
+    function drawHUD(W, H, unitSize, rideT, globalT, curEle, palette) {
+      const shownTotalKm = parseFloat(inKm.value) || totalKm;
+      const shownTotalGain = parseFloat(inGain.value) || totalGain;
+      const title = (inTitle.value || 'TRASA').toUpperCase();
+
+      const km = rideT * shownTotalKm;
+      const gain = Math.round(rideT * shownTotalGain);
+      const elev = Math.round(curEle);
+
+      const pad = W * 0.018;
+      const boxW = Math.min(W * 0.44, unitSize * 0.24);
+      const boxH = unitSize * 0.085;
+      const bx = W - boxW - pad;
+      const by = pad;
+
+      const alpha = Math.min(1, globalT / 0.10);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ctx.fillStyle = 'rgba(13, 25, 21, 0.88)';
+      ctx.strokeStyle = palette.hex;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, boxW, boxH, 14);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = palette.core;
+      ctx.font = `700 ${Math.round(unitSize * 0.0085)}px Inter, system-ui, sans-serif`;
+      let shownTitle = title;
+      while (ctx.measureText(shownTitle).width > boxW - 30 && shownTitle.length > 4) {
+        shownTitle = shownTitle.slice(0, -2) + '…';
+      }
+      ctx.fillText(shownTitle, bx + 15, by + boxH * 0.25);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `800 ${Math.round(unitSize * 0.017)}px Inter, system-ui, sans-serif`;
+      const kmStr = `${km.toFixed(1)} km`;
+      ctx.fillText(kmStr, bx + 15, by + boxH * 0.57);
+      const kmW = ctx.measureText(kmStr).width;
+
+      ctx.fillStyle = '#94a8a0';
+      ctx.font = `600 ${Math.round(unitSize * 0.0095)}px Inter, system-ui, sans-serif`;
+      ctx.fillText(`/ ${shownTotalKm.toFixed(1)} km`, bx + 21 + kmW, by + boxH * 0.57);
+
+      ctx.fillStyle = '#d1fae5';
+      ctx.font = `600 ${Math.round(unitSize * 0.0095)}px Inter, system-ui, sans-serif`;
+      const eleTxt = hasElevation ? `  •  ${elev} m n.p.m.` : '';
+      ctx.fillText(`↑ ${gain} m${eleTxt}`, bx + 15, by + boxH * 0.83);
+
+      const barX = bx + 15;
+      const barY = by + boxH - 7;
+      const barW = boxW - 30;
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(barX, barY, barW, 4);
+      ctx.fillStyle = palette.hex;
+      ctx.fillRect(barX, barY, barW * rideT, 4);
+
+      ctx.restore();
+    }
+
+    function updateStatusLine() {
+      const modeName = isLoopRoute ? 'Pętla' : 'A do B';
+      const poiTxt = activePOIs.length ? ` • ${activePOIs.length} POI` : '';
+      statusText.textContent = `Wczytano GPX: ${totalKm.toFixed(1)} km • ↑ ${Math.round(totalGain)} m • ${modeName}${poiTxt} — kliknij „2. Generuj video”.`;
+    }
+
+    function loop(ts) {
+      if (!startTime) startTime = ts;
+      const dur = parseInt(inDuration.value, 10) || 9000;
+      const elapsed = isRecording
+        ? Math.min(dur, ts - startTime)
+        : (ts - startTime) % (dur + 1200);
+      renderFrame(Math.min(elapsed, dur));
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function startAnimation() {
+      if (rafId) cancelAnimationFrame(rafId);
+      startTime = null;
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function loadGpxFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          parseGPX(e.target.result, file.name);
+          dropOverlay.classList.add('hidden');
+          flipBtn.disabled = false;
+          recordBtn.disabled = false;
+        } catch (err) {
+          alert(err.message || 'Nie udało się odczytać pliku GPX.');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    fileInput.addEventListener('change', (e) => loadGpxFile(e.target.files[0]));
+    dropOverlay.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => e.preventDefault());
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      loadGpxFile(e.dataTransfer.files[0]);
+    });
+
+    flipBtn.addEventListener('click', () => reverseRouteOrder());
+
+    inAspect.addEventListener('change', () => {
+      const [w, h] = inAspect.value.split('x').map(Number);
+      canvas.width = w;
+      canvas.height = h;
+      if (activePts.length) {
+        computeOverviewCamera();
+        preloadTiles();
+        startAnimation();
+      }
+    });
+
+    inMapStyle.addEventListener('change', () => {
+      failedTileCount = 0;
+      if (activePts.length) {
+        computeOverviewCamera();
+        preloadTiles();
+      }
+    });
+
+    inDuration.addEventListener('change', () => {
+      if (activePts.length) startAnimation();
+    });
+
+    recordBtn.addEventListener('click', async () => {
+      if (!activePts.length || isRecording) return;
+
+      isRecording = true;
+      recordBtn.disabled = true;
+      recordBtn.textContent = 'Pobieranie kafelków mapy...';
+      statusText.textContent = 'Przygotowywanie kafelków mapy przed nagraniem...';
+
+      await Promise.race([
+        preloadTiles(),
+        new Promise((res) => setTimeout(res, 3500))
+      ]);
+
+      const dur = parseInt(inDuration.value, 10) || 9000;
+      const mimeCandidates = [
+        'video/mp4;codecs=avc1',
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+      const stream = canvas.captureStream(60);
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 7000000 } : {});
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        isRecording = false;
+        const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const safeName = (inTitle.value || 'animacja-trasy').toLowerCase().replace(/[^a-z0-9]+/gi, '-');
+        a.href = url;
+        a.download = `${safeName}.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        recordBtn.disabled = false;
+        recordBtn.textContent = '2. Generuj video';
+        updateStatusLine();
+        startAnimation();
+      };
+
+      startAnimation();
+      recorder.start();
+
+      const t0 = performance.now();
+      const progressTimer = setInterval(() => {
+        const pct = Math.min(100, Math.round(((performance.now() - t0) / dur) * 100));
+        recordBtn.textContent = `Nagrywanie ${pct}%...`;
+        statusText.textContent = `Trwa generowanie pliku wideo (${pct}%)...`;
+      }, 200);
+
+      setTimeout(() => {
+        clearInterval(progressTimer);
+        if (recorder.state === 'recording') recorder.stop();
+      }, dur + 500);
+    });
+  </script>
+</body>
+</html>
