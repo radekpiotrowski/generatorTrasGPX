@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>Generator animacji tras (GPX + OSM)</title>
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     :root {
       --bg: #0b1311;
@@ -127,6 +128,8 @@
       justify-content: center;
     }
     canvas {
+      position: relative;
+      z-index: 1;
       display: block;
       max-width: 100%;
       max-height: 76vh;
@@ -136,6 +139,7 @@
     .drop-overlay {
       position: absolute;
       inset: 0;
+      z-index: 2;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -155,6 +159,23 @@
     }
     .drop-box h2 { margin: 0 0 8px; font-size: 21px; }
     .drop-box p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
+
+    /* Bufor WebGL dla Dark Mode zamknięty w 1x1 px pod canvasem (nigdy nie przebija w tle strony) */
+    #mlMapWrap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+      display: none;
+    }
+    #mlMap {
+      width: 1600px;
+      height: 720px;
+    }
   </style>
 </head>
 <body>
@@ -188,6 +209,7 @@
         <label class="field">Mapa:
           <select id="inMapStyle">
             <option value="osm" selected>OpenStreetMap</option>
+            <option value="dark_mode">Dark Mode</option>
             <option value="topo_relief">Topo 3D (Relief)</option>
             <option value="cyclosm">CyclOSM (Rowerowa)</option>
             <option value="opentopo">OpenTopoMap</option>
@@ -229,6 +251,7 @@
   </div>
 
   <div class="stage-wrap" id="dropZone">
+    <div id="mlMapWrap"><div id="mlMap"></div></div>
     <canvas id="canvas" width="1600" height="900"></canvas>
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
@@ -241,6 +264,8 @@
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const mlMapWrap = document.getElementById('mlMapWrap');
+    const mlContainer = document.getElementById('mlMap');
     const fileInput = document.getElementById('fileInput');
     const dropZone = document.getElementById('dropZone');
     const dropOverlay = document.getElementById('dropOverlay');
@@ -274,6 +299,12 @@
         attr: '© OpenStreetMap contributors',
         maxZ: 18,
         url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
+      },
+      dark_mode: {
+        name: 'Dark Mode',
+        attr: '© OpenFreeMap • OpenMapTiles • OpenStreetMap',
+        maxZ: 18,
+        isVector: true
       },
       topo_relief: {
         name: 'Topo 3D (Relief)',
@@ -314,6 +345,183 @@
       }
     };
 
+    const DARK_MODE_STYLE = {
+      version: 8,
+      name: 'Dark Mode',
+      sources: {
+        openmaptiles: {
+          type: 'vector',
+          url: 'https://tiles.openfreemap.org/planet'
+        }
+      },
+      layers: [
+        {
+          id: 'background',
+          type: 'background',
+          paint: { 'background-color': '#182028' }
+        },
+        {
+          id: 'landuse_urban',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'landuse',
+          filter: ['in', 'class', 'residential', 'commercial', 'industrial', 'retail', 'suburb', 'neighbourhood'],
+          paint: { 'fill-color': '#2b3438', 'fill-opacity': 0.9 }
+        },
+        {
+          id: 'landcover_grass_wood',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'landcover',
+          filter: ['in', 'class', 'grass', 'wood', 'wetland', 'farmland'],
+          paint: { 'fill-color': '#3e4b3c', 'fill-opacity': 0.85 }
+        },
+        {
+          id: 'park',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'park',
+          paint: { 'fill-color': '#495742', 'fill-opacity': 0.78 }
+        },
+        {
+          id: 'landuse_green',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'landuse',
+          filter: ['in', 'class', 'park', 'grass', 'cemetery', 'recreation_ground', 'pitch', 'stadium'],
+          paint: { 'fill-color': '#495742', 'fill-opacity': 0.82 }
+        },
+        {
+          id: 'landuse_rail_yard',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'landuse',
+          filter: ['==', 'class', 'railway'],
+          paint: { 'fill-color': '#232c3b', 'fill-opacity': 0.95 }
+        },
+        {
+          id: 'aeroway_area',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'aeroway',
+          paint: { 'fill-color': '#222a34' }
+        },
+        {
+          id: 'water',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'water',
+          paint: { 'fill-color': '#162432' }
+        },
+        {
+          id: 'waterway',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'waterway',
+          paint: {
+            'line-color': '#21364a',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 15, 3]
+          }
+        },
+        {
+          id: 'road_casing_dark',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'transportation',
+          filter: ['all', ['!=', 'class', 'rail'], ['!=', 'class', 'transit'], ['!=', 'class', 'ferry']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#0f141d',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              8, 1,
+              13, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 5.5, ['secondary', 'tertiary'], 4, 2.2],
+              17, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 14, ['secondary', 'tertiary'], 9, 4.5]
+            ]
+          }
+        },
+        {
+          id: 'building',
+          type: 'fill',
+          source: 'openmaptiles',
+          'source-layer': 'building',
+          paint: {
+            'fill-color': '#3e444a',
+            'fill-outline-color': '#1e242b',
+            'fill-opacity': 0.88
+          }
+        },
+        {
+          id: 'road_gold_lines',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'transportation',
+          filter: ['all', ['!=', 'class', 'rail'], ['!=', 'class', 'transit'], ['!=', 'class', 'ferry'], ['!=', 'brunnel', 'bridge']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': [
+              'match', ['get', 'class'],
+              ['path', 'track'], '#968f42',
+              ['minor', 'service'], '#8f8a48',
+              ['secondary', 'tertiary'], '#ada34c',
+              '#c49a5c'
+            ],
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              8, 0.5,
+              14, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 2.2, 1.1],
+              17, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 3.2, 1.5]
+            ],
+            'line-opacity': 0.85
+          }
+        },
+        {
+          id: 'railway_lines',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'transportation',
+          filter: ['in', 'class', 'rail', 'transit'],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#5d7c9c',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.2, 16, 4.5],
+            'line-opacity': 0.45
+          }
+        },
+        {
+          id: 'bridge_copper',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'transportation',
+          filter: ['all', ['==', 'brunnel', 'bridge'], ['!=', 'class', 'rail']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#c98e68',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 2,
+              15, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 10, 5],
+              17, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 16, 8]
+            ],
+            'line-opacity': 0.48
+          }
+        },
+        {
+          id: 'admin_boundary',
+          type: 'line',
+          source: 'openmaptiles',
+          'source-layer': 'boundary',
+          filter: ['<=', 'admin_level', 4],
+          paint: {
+            'line-color': '#64748b',
+            'line-width': 1,
+            'line-dasharray': [3, 2],
+            'line-opacity': 0.45
+          }
+        }
+      ]
+    };
+
     // Stan GPX i trasy
     let gpxTracks = [];
     let gpxWaypoints = [];
@@ -329,8 +537,9 @@
     // Stan mapy i kamery
     let overviewCam = { wx: 0.5, wy: 0.5, z: 6 };
     const tileCache = new Map();
-    let failedTileCount = 0;
-    let fallbackTriggered = false;
+    let osmBlockedNotified = false;
+    let mlMap = null;
+    let mlReady = false;
 
     // Stan animacji
     let startTime = null;
@@ -374,6 +583,12 @@
       return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2;
     }
 
+    function worldToLonLat(wx, wy) {
+      const lon = wx * 360 - 180;
+      const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180) / Math.PI;
+      return [lon, lat];
+    }
+
     function haversineKm(lat1, lon1, lat2, lon2) {
       const R = 6371;
       const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -381,6 +596,38 @@
       const a = Math.sin(dLat / 2) ** 2 +
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function syncDarkModeVisibility() {
+      const isDark = inMapStyle.value === 'dark_mode';
+      mlMapWrap.style.display = isDark ? 'block' : 'none';
+      if (isDark) {
+        const { mapW, mapH } = getMapViewport();
+        mlContainer.style.width = `${mapW}px`;
+        mlContainer.style.height = `${mapH}px`;
+        if (mlMap) mlMap.resize();
+      }
+    }
+
+    function ensureDarkModeMap() {
+      if (inMapStyle.value !== 'dark_mode' || typeof maplibregl === 'undefined') return null;
+      syncDarkModeVisibility();
+      if (!mlMap) {
+        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
+        mlMap = new maplibregl.Map({
+          container: mlContainer,
+          style: DARK_MODE_STYLE,
+          center: [lon, lat],
+          zoom: Math.max(1, overviewCam.z - 1),
+          interactive: false,
+          attributionControl: false,
+          preserveDrawingBuffer: true,
+          pixelRatio: 1,
+          fadeDuration: 0
+        });
+        mlMap.on('load', () => { mlReady = true; });
+      }
+      return mlMap;
     }
 
     // --- Parser GPX ---
@@ -635,15 +882,7 @@
       };
     }
 
-    // --- Ładowanie kafelków mapy (z obsługą warstwy nakładki cieniowania 3D dla Topo 3D) ---
-    function triggerMapFallback(reason) {
-      if (fallbackTriggered) return;
-      fallbackTriggered = true;
-      inMapStyle.value = 'esri_topo';
-      statusText.textContent = reason;
-      preloadTiles();
-    }
-
+    // --- Ładowanie kafelków (OpenStreetMap pozostaje domyślnie wybrany bez samoczynnej zmiany listy) ---
     function requestTile(styleKey, z, tx, ty, isOverlay = false) {
       const maxTile = 1 << z;
       if (ty < 0 || ty >= maxTile) return null;
@@ -664,10 +903,10 @@
         img.referrerPolicy = 'strict-origin-when-cross-origin';
         img.onload = () => {
           if (!isOverlay && styleKey === 'osm' && isOsmBlockedTile(img)) {
-            entry.status = 'error';
-            triggerMapFallback('Brak nagłówka Referer (np. podgląd lokalny) — przełączono na Topo (ArcGIS).');
-            resolve(entry);
-            return;
+            if (!osmBlockedNotified) {
+              osmBlockedNotified = true;
+              statusText.textContent = 'Podgląd lokalny bez nagłówka Referer (OSM 403) — na GitHub Pages OpenStreetMap zadziała, a lokalnie możesz wybrać Dark Mode lub Topo.';
+            }
           }
           entry.img = img;
           entry.status = 'ok';
@@ -675,12 +914,6 @@
         };
         img.onerror = () => {
           entry.status = 'error';
-          if (!isOverlay) {
-            failedTileCount++;
-            if (!fallbackTriggered && styleKey === 'osm' && failedTileCount >= 2) {
-              triggerMapFallback('Serwer OSM odrzucił żądanie — przełączono automatycznie na Topo (ArcGIS).');
-            }
-          }
           resolve(entry);
         };
         img.src = urlFn(z, wx, ty);
@@ -714,11 +947,24 @@
     }
 
     async function preloadTiles() {
+      syncDarkModeVisibility();
       if (!activePts.length) return [];
-      const { mapW, mapH } = getMapViewport();
-      const promises = [];
       const provider = MAP_PROVIDERS[inMapStyle.value];
 
+      if (provider.isVector) {
+        const m = ensureDarkModeMap();
+        if (!m) return [];
+        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
+        m.jumpTo({ center: [lon, lat], zoom: Math.max(1, overviewCam.z - 1), animate: false });
+        return new Promise((resolve) => {
+          if (mlReady && m.areTilesLoaded()) { resolve(); return; }
+          m.once('idle', resolve);
+          setTimeout(resolve, 3500);
+        });
+      }
+
+      const { mapW, mapH } = getMapViewport();
+      const promises = [];
       for (const t of getVisibleTilesForCamera(overviewCam, mapW, mapH)) {
         const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
         if (entry && entry.status === 'loading') promises.push(entry.promise);
@@ -899,7 +1145,7 @@
       const rideT = Math.max(0, Math.min(1, (globalT - 0.10) / 0.80));
 
       ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = '#111b18';
+      ctx.fillStyle = '#182028';
       ctx.fillRect(0, 0, W, H);
 
       if (!activePts.length) return;
@@ -907,10 +1153,7 @@
       const cam = getCameraAtTime(globalT);
       const styleKey = inMapStyle.value;
       const provider = MAP_PROVIDERS[styleKey];
-      const tileZ = Math.max(2, Math.min(provider.maxZ, Math.round(cam.z)));
-      const nTiles = 1 << tileZ;
       const pxScale = Math.pow(2, cam.z) * 256;
-      const tileScreenSize = Math.pow(2, cam.z - tileZ) * 256;
 
       const worldToScreen = (wx, wy) => ({
         x: mapW / 2 + (wx - cam.wx) * pxScale,
@@ -922,28 +1165,41 @@
       ctx.rect(0, 0, mapW, mapH);
       ctx.clip();
 
-      const tiles = getVisibleTilesForCamera(cam, mapW, mapH);
-      for (const t of tiles) {
-        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
-        const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
-        const sy = mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
-        if (entry && entry.status === 'ok' && entry.img) {
-          ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
-          if (provider.overlayUrl) {
-            const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
-            if (ov && ov.status === 'ok' && ov.img) {
-              ctx.save();
-              ctx.globalCompositeOperation = 'multiply';
-              ctx.globalAlpha = 0.72;
-              ctx.drawImage(ov.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
-              ctx.restore();
+      if (provider.isVector) {
+        const m = ensureDarkModeMap();
+        if (m) {
+          const [lon, lat] = worldToLonLat(cam.wx, cam.wy);
+          m.jumpTo({ center: [lon, lat], zoom: Math.max(1, cam.z - 1), animate: false });
+          ctx.drawImage(m.getCanvas(), 0, 0, mapW, mapH);
+        }
+      } else {
+        const tileZ = Math.max(2, Math.min(provider.maxZ, Math.round(cam.z)));
+        const nTiles = 1 << tileZ;
+        const tileScreenSize = Math.pow(2, cam.z - tileZ) * 256;
+        const tiles = getVisibleTilesForCamera(cam, mapW, mapH);
+
+        for (const t of tiles) {
+          const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
+          const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
+          const sy = mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
+          if (entry && entry.status === 'ok' && entry.img) {
+            ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+            if (provider.overlayUrl) {
+              const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
+              if (ov && ov.status === 'ok' && ov.img) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.globalAlpha = 0.72;
+                ctx.drawImage(ov.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+                ctx.restore();
+              }
             }
+          } else {
+            ctx.fillStyle = '#182622';
+            ctx.fillRect(sx, sy, tileScreenSize + 0.5, tileScreenSize + 0.5);
+            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+            ctx.strokeRect(sx, sy, tileScreenSize, tileScreenSize);
           }
-        } else {
-          ctx.fillStyle = '#182622';
-          ctx.fillRect(sx, sy, tileScreenSize + 0.5, tileScreenSize + 0.5);
-          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-          ctx.strokeRect(sx, sy, tileScreenSize, tileScreenSize);
         }
       }
 
@@ -1020,9 +1276,9 @@
       ctx.save();
       ctx.font = `600 ${Math.round(unitSize * 0.0075)}px Inter, system-ui, sans-serif`;
       const attrW = ctx.measureText(provider.attr).width + 14;
-      ctx.fillStyle = 'rgba(255,255,255,0.78)';
+      ctx.fillStyle = styleKey === 'dark_mode' ? 'rgba(15,23,34,0.78)' : 'rgba(255,255,255,0.78)';
       ctx.fillRect(mapW - attrW, mapH - 20, attrW, 20);
-      ctx.fillStyle = '#111827';
+      ctx.fillStyle = styleKey === 'dark_mode' ? '#cbd5e1' : '#111827';
       ctx.fillText(provider.attr, mapW - attrW + 7, mapH - 6);
       ctx.restore();
 
@@ -1248,6 +1504,7 @@
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
+          osmBlockedNotified = false;
           parseGPX(e.target.result, file.name);
           dropOverlay.classList.add('hidden');
           flipBtn.disabled = false;
@@ -1281,11 +1538,13 @@
     });
 
     inMapStyle.addEventListener('change', () => {
-      failedTileCount = 0;
-      fallbackTriggered = false;
+      osmBlockedNotified = false;
       if (activePts.length) {
         computeOverviewCamera();
         preloadTiles();
+        updateStatusLine();
+      } else {
+        syncDarkModeVisibility();
       }
     });
 
