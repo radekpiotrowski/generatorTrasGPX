@@ -36,7 +36,7 @@
       padding: 14px 18px;
       display: flex;
       flex-direction: column;
-      gap: 11px;
+      gap: 10px;
       backdrop-filter: blur(10px);
     }
     .row {
@@ -57,9 +57,21 @@
       align-items: center;
     }
 
-    .slots-grid {
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slots-grid, .pois-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
       gap: 7px;
       width: 100%;
     }
@@ -112,7 +124,7 @@
       color: #fdba74;
       border-radius: 10px;
       min-height: 70px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
       display: flex;
@@ -121,7 +133,17 @@
       gap: 6px;
       transition: background 0.15s ease, transform 0.12s ease;
     }
-    .add-slot-btn:hover {
+    .add-slot-btn.poi-add {
+      min-height: 44px;
+      background: rgba(56, 189, 248, 0.1);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: #7dd3fc;
+    }
+    .add-slot-btn.poi-add:hover {
+      background: rgba(56, 189, 248, 0.2);
+      color: #ffffff;
+    }
+    .add-slot-btn:hover:not(:disabled) {
       background: rgba(249, 115, 22, 0.22);
       color: #ffffff;
       transform: translateY(-1px);
@@ -146,7 +168,7 @@
       border-radius: 50%;
       flex-shrink: 0;
     }
-    .slot-name-input {
+    .slot-name-input, .poi-coord-input {
       background: rgba(0, 0, 0, 0.28);
       border: 1px solid rgba(255, 255, 255, 0.14);
       border-radius: 6px;
@@ -159,10 +181,28 @@
       outline: none;
       transition: border-color 0.15s ease;
     }
-    .slot-name-input:focus {
+    .poi-coord-input {
+      font-weight: 500;
+      font-size: 11px;
+      color: #cbd5e1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .slot-name-input:focus, .poi-coord-input:focus {
       border-color: #f97316;
       background: rgba(0, 0, 0, 0.45);
     }
+    .poi-icon-select {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 11px;
+      padding: 2px 4px;
+      outline: none;
+      cursor: pointer;
+    }
+    .poi-icon-select option { background: #13201c; color: var(--text); }
+
     .slot-mini-btns {
       display: flex;
       gap: 3px;
@@ -179,6 +219,11 @@
       line-height: 1.3;
     }
     .mini-btn:hover { background: rgba(255, 255, 255, 0.18); }
+    .mini-btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
     .slot-meta {
       font-size: 10.5px;
       color: var(--muted);
@@ -236,9 +281,7 @@
       padding: 2px 6px;
       outline: none;
     }
-    label.field input[type="number"]:focus {
-      border-color: #f97316;
-    }
+    label.field input[type="number"]:focus { border-color: #f97316; }
     label.field select {
       background: transparent;
       border: none;
@@ -254,7 +297,7 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
       background: #1d302a;
       color: var(--text);
-      padding: 8px 14px;
+      padding: 8px 13px;
       border-radius: 10px;
       font-size: 13px;
       font-weight: 600;
@@ -262,6 +305,12 @@
       transition: transform 0.12s ease, background 0.15s ease;
     }
     button.action:hover:not(:disabled), .file-btn:hover { background: #264038; transform: translateY(-1px); }
+    button.action.active-mode {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
     button.primary {
       background: linear-gradient(135deg, #f97316, #ea580c);
       border-color: #fb923c;
@@ -346,6 +395,7 @@
         <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple />
         <input id="slotFileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
 
+        <button class="action" id="addPoiMapBtn" title="Włącz tryb klikania na mapę, aby stawiać punkty POI" disabled>📍 Dodaj POI</button>
         <button class="action" id="flipBtn" title="Odwróć kierunek wszystkich tras" disabled>⇄ Odwróć</button>
         <button class="action" id="randomAllBtn" title="Przypisz losowe kolory wszystkim trasom" disabled>🎲 Random</button>
         <button class="action primary" id="recordBtn" disabled>2. Generuj video</button>
@@ -379,7 +429,7 @@
             <option value="relative">Wspólny start (00:00)</option>
           </select>
         </label>
-        <label class="field" title="Wpisz własną długość animacji w sekundach">Czas animacji (s):
+        <label class="field" title="Wpisz własną długość animacji w sekundach">Czas (s):
           <input id="inDuration" type="number" min="1" max="300" step="1" value="9" />
         </label>
         <label class="field" title="Pokaż lub ukryj wykres profilu wysokości u dołu">
@@ -390,10 +440,22 @@
           <input id="inShowLegend" type="checkbox" checked />
           <span>Legenda</span>
         </label>
+        <label class="field" title="Pokaż lub ukryj punkty POI na mapie">
+          <input id="inShowPoi" type="checkbox" checked />
+          <span>Punkty POI</span>
+        </label>
+        <label class="field" title="Zaznaczaj POI na wykresie wysokości, gdy track znajdzie się na jego współrzędnych">
+          <input id="inShowPoiOnElev" type="checkbox" checked />
+          <span>POI na wykresie</span>
+        </label>
       </div>
     </div>
 
+    <div class="section-label"><span>Trasy GPX</span></div>
     <div class="slots-grid" id="slotsGrid"></div>
+
+    <div class="section-label"><span>Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „+1 POI” poniżej)</span></div>
+    <div class="pois-grid" id="poisGrid"></div>
   </div>
 
   <div class="stage-wrap" id="dropZone">
@@ -402,7 +464,7 @@
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
         <h2>1. Wrzuć pliki .gpx</h2>
-        <p>Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>+1</b>.<br>Każdy track rysuje się w swoim tempie kolorową kropką z nazwą podążającą obok.</p>
+        <p>Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>+1</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wklejając współrzędne.</p>
       </div>
     </div>
   </div>
@@ -417,7 +479,9 @@
     const dropZone = document.getElementById('dropZone');
     const dropOverlay = document.getElementById('dropOverlay');
     const slotsGrid = document.getElementById('slotsGrid');
+    const poisGrid = document.getElementById('poisGrid');
 
+    const addPoiMapBtn = document.getElementById('addPoiMapBtn');
     const flipBtn = document.getElementById('flipBtn');
     const randomAllBtn = document.getElementById('randomAllBtn');
     const recordBtn = document.getElementById('recordBtn');
@@ -429,6 +493,8 @@
     const inDuration = document.getElementById('inDuration');
     const inShowElev = document.getElementById('inShowElev');
     const inShowLegend = document.getElementById('inShowLegend');
+    const inShowPoi = document.getElementById('inShowPoi');
+    const inShowPoiOnElev = document.getElementById('inShowPoiOnElev');
 
     const BASIC_COLORS = [
       { key: 'orange', name: 'Pomarańczowy', hex: '#f97316', core: '#ffdfba' },
@@ -441,6 +507,19 @@
       { key: 'pink',   name: 'Różowy',       hex: '#ec4899', core: '#fce7f3' },
       { key: 'lime',   name: 'Limonkowy',    hex: '#84cc16', core: '#ecfccb' },
       { key: 'sky',    name: 'Błękitny',     hex: '#0ea5e9', core: '#e0f2fe' }
+    ];
+
+    const POI_COLORS = [
+      ...BASIC_COLORS,
+      { key: 'white', name: 'Biały', hex: '#ffffff', core: '#e2e8f0' }
+    ];
+
+    const POI_ICONS = [
+      { key: 'diamond', label: '◆ Romb' },
+      { key: 'pin',     label: '📍 Pinezka' },
+      { key: 'flag',    label: '⚑ Flaga' },
+      { key: 'target',  label: '⌖ Cel' },
+      { key: 'dot',     label: '● Kropka' }
     ];
 
     const MAP_PROVIDERS = {
@@ -624,6 +703,11 @@
     const slots = [createSlot(0)];
     let pendingSlotIndex = 0;
 
+    // Lista punktów POI (zarówno ręcznych, jak i wczytanych z GPX <wpt>)
+    let pois = []; // [{ id, name, lat, lon, wx, wy, color, icon, sourceSlot, trackMatches }]
+    let nextPoiId = 1;
+    let mapPickMode = null; // null | 'add' | poiId (przenoszenie konkretnego POI)
+
     let globalMaxKm = 1;
     let globalHasElevation = false;
     let globalMinEle = 0;
@@ -634,6 +718,7 @@
     let useClockLabels = false;
 
     let overviewCam = { wx: 0.5, wy: 0.5, z: 6 };
+    let lastCam = { wx: 0.5, wy: 0.5, z: 6 };
     const tileCache = new Map();
     let osmBlockedNotified = false;
     let mlMap = null;
@@ -687,6 +772,15 @@
       const lon = wx * 360 - 180;
       const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180) / Math.PI;
       return [lon, lat];
+    }
+
+    function parseCoordsText(str) {
+      const nums = (str || '').trim().match(/-?\d+(?:[.,]\d+)?/g);
+      if (!nums || nums.length < 2) return null;
+      const lat = parseFloat(nums[0].replace(',', '.'));
+      const lon = parseFloat(nums[1].replace(',', '.'));
+      if (isNaN(lat) || isNaN(lon) || lat < -85 || lat > 85 || lon < -180 || lon > 180) return null;
+      return { lat, lon };
     }
 
     function haversineKm(lat1, lon1, lat2, lon2) {
@@ -777,6 +871,15 @@
       }
 
       if (rawPts.length < 2) throw new Error(`Brak punktów trasy w pliku: ${fileName}`);
+
+      // Wczytaj waypointy <wpt> z pliku GPX (opcjonalne POI)
+      const importedWpts = [];
+      doc.querySelectorAll('wpt').forEach((wpt) => {
+        const lat = parseFloat(wpt.getAttribute('lat'));
+        const lon = parseFloat(wpt.getAttribute('lon'));
+        const wName = wpt.querySelector('name')?.textContent?.trim() || 'POI';
+        if (!isNaN(lat) && !isNaN(lon)) importedWpts.push({ name: wName, lat, lon });
+      });
 
       if (rawPts.length > 2500) {
         const step = Math.ceil(rawPts.length / 2500);
@@ -891,6 +994,7 @@
       return {
         name: trackName,
         pts,
+        importedWpts,
         totalKm,
         gain,
         hasEle,
@@ -925,6 +1029,50 @@
 
     function getActiveSlots() {
       return slots.filter((s) => s.track !== null);
+    }
+
+    // Dopasowuje każdy POI do najbliższego odcinka każdego z aktywnych tracków (dla synchronizacji z wykresem)
+    function syncPoisWithTracks() {
+      const active = getActiveSlots();
+      for (const poi of pois) {
+        poi.trackMatches = [];
+        for (const slot of active) {
+          const trk = slot.track;
+          if (!trk.hasEle) continue;
+          let bestIdx = 0, bestDist = Infinity;
+          for (let i = 0; i < trk.pts.length; i++) {
+            const d = haversineKm(poi.lat, poi.lon, trk.pts[i].lat, trk.pts[i].lon);
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+          }
+          const thresholdKm = Math.max(0.25, Math.min(2.0, trk.totalKm * 0.015));
+          if (bestDist <= thresholdKm) {
+            poi.trackMatches.push({
+              slot,
+              km: trk.pts[bestIdx].km,
+              ele: trk.pts[bestIdx].smoothEle
+            });
+          }
+        }
+      }
+    }
+
+    function addPoiItem({ name, lat, lon, color, icon = 'diamond', sourceSlot = null }) {
+      const item = {
+        id: nextPoiId++,
+        name: name || `POI #${pois.length + 1}`,
+        lat,
+        lon,
+        wx: lonToWorldX(lon),
+        wy: latToWorldY(lat),
+        color: color || POI_COLORS[pois.length % POI_COLORS.length],
+        icon,
+        sourceSlot,
+        trackMatches: []
+      };
+      pois.push(item);
+      syncPoisWithTracks();
+      renderPoisUI();
+      return item;
     }
 
     function recomputeGlobalTimeline() {
@@ -989,9 +1137,24 @@
       globalEndMs = Math.max(...active.map((s) => s.track.simEndMs));
       globalSpanMs = Math.max(1000, globalEndMs - globalStartMs);
 
+      syncPoisWithTracks();
       computeOverviewCamera();
       preloadTiles();
       updateStatusLine();
+    }
+
+    function setPickMode(mode) {
+      mapPickMode = mode;
+      addPoiMapBtn.classList.toggle('active-mode', mode === 'add');
+      canvas.style.cursor = mode ? 'crosshair' : 'default';
+      renderPoisUI();
+      if (mode === 'add') {
+        statusText.textContent = 'Tryb dodawania POI: kliknij wybrane miejsce na mapie (Esc lub kliknij „📍 Dodaj POI”, aby zakończyć).';
+      } else if (typeof mode === 'number') {
+        statusText.textContent = 'Kliknij na mapę, aby przenieść wybrany punkt POI w nowe miejsce (Esc = anuluj).';
+      } else {
+        updateStatusLine();
+      }
     }
 
     function renderSlotsUI() {
@@ -1074,8 +1237,14 @@
           delBtn.textContent = '×';
           delBtn.title = 'Usuń ten plik GPX';
           delBtn.addEventListener('click', () => {
-            if (slots.length > 1) slots.splice(idx, 1);
-            else slots[0].track = null;
+            // Usuń powiązane automatyczne POI z tego pliku
+            pois = pois.filter((p) => p.sourceSlot !== idx);
+            if (slots.length > 1) {
+              slots.splice(idx, 1);
+              pois.forEach((p) => { if (p.sourceSlot !== null && p.sourceSlot > idx) p.sourceSlot--; });
+            } else {
+              slots[0].track = null;
+            }
             onTracksChanged();
           });
 
@@ -1129,11 +1298,151 @@
       slotsGrid.appendChild(addBtn);
     }
 
+    function renderPoisUI() {
+      poisGrid.innerHTML = '';
+      pois.forEach((poi, idx) => {
+        const card = document.createElement('div');
+        card.className = 'slot-card';
+
+        const head = document.createElement('div');
+        head.className = 'slot-head';
+
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'slot-name-wrap';
+
+        const dot = document.createElement('span');
+        dot.className = 'slot-dot';
+        dot.style.background = poi.color.hex;
+
+        const nameInp = document.createElement('input');
+        nameInp.type = 'text';
+        nameInp.className = 'slot-name-input';
+        nameInp.value = poi.name;
+        nameInp.placeholder = `POI #${idx + 1}`;
+        nameInp.title = 'Krótki opis wyświetlany przy punkcie POI';
+        nameInp.addEventListener('input', () => { poi.name = nameInp.value; });
+
+        nameWrap.appendChild(dot);
+        nameWrap.appendChild(nameInp);
+
+        const miniBtns = document.createElement('div');
+        miniBtns.className = 'slot-mini-btns';
+
+        const moveBtn = document.createElement('button');
+        moveBtn.className = 'mini-btn' + (mapPickMode === poi.id ? ' active' : '');
+        moveBtn.textContent = '🎯';
+        moveBtn.title = 'Kliknij na mapę, aby przenieść ten POI';
+        moveBtn.disabled = getActiveSlots().length === 0;
+        moveBtn.addEventListener('click', () => {
+          setPickMode(mapPickMode === poi.id ? null : poi.id);
+        });
+
+        const randBtn = document.createElement('button');
+        randBtn.className = 'mini-btn';
+        randBtn.textContent = '🎲';
+        randBtn.title = 'Losowy kolor POI';
+        randBtn.addEventListener('click', () => {
+          const others = POI_COLORS.filter((c) => c.key !== poi.color.key);
+          poi.color = others[Math.floor(Math.random() * others.length)];
+          renderPoisUI();
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'mini-btn';
+        delBtn.textContent = '×';
+        delBtn.title = 'Usuń punkt POI';
+        delBtn.addEventListener('click', () => {
+          if (mapPickMode === poi.id) setPickMode(null);
+          pois = pois.filter((p) => p.id !== poi.id);
+          renderPoisUI();
+        });
+
+        miniBtns.appendChild(moveBtn);
+        miniBtns.appendChild(randBtn);
+        miniBtns.appendChild(delBtn);
+        head.appendChild(nameWrap);
+        head.appendChild(miniBtns);
+
+        // Wiersz: wklejanie współrzędnych (lat, lon) + wybór ikony
+        const coordRow = document.createElement('div');
+        coordRow.className = 'slot-head';
+
+        const coordInp = document.createElement('input');
+        coordInp.type = 'text';
+        coordInp.className = 'poi-coord-input';
+        coordInp.value = `${poi.lat.toFixed(5)}, ${poi.lon.toFixed(5)}`;
+        coordInp.placeholder = '54.3520, 18.6466';
+        coordInp.title = 'Wklej współrzędne (lat, lon) np. z Google Maps';
+        coordInp.addEventListener('change', () => {
+          const parsed = parseCoordsText(coordInp.value);
+          if (parsed) {
+            poi.lat = parsed.lat;
+            poi.lon = parsed.lon;
+            poi.wx = lonToWorldX(parsed.lon);
+            poi.wy = latToWorldY(parsed.lat);
+            coordInp.value = `${poi.lat.toFixed(5)}, ${poi.lon.toFixed(5)}`;
+            syncPoisWithTracks();
+          } else {
+            coordInp.value = `${poi.lat.toFixed(5)}, ${poi.lon.toFixed(5)}`;
+          }
+        });
+
+        const iconSel = document.createElement('select');
+        iconSel.className = 'poi-icon-select';
+        iconSel.title = 'Kształt ikony POI';
+        POI_ICONS.forEach((ic) => {
+          const opt = document.createElement('option');
+          opt.value = ic.key;
+          opt.textContent = ic.label;
+          if (poi.icon === ic.key) opt.selected = true;
+          iconSel.appendChild(opt);
+        });
+        iconSel.addEventListener('change', () => { poi.icon = iconSel.value; });
+
+        coordRow.appendChild(coordInp);
+        coordRow.appendChild(iconSel);
+
+        const palRow = document.createElement('div');
+        palRow.className = 'palette-row';
+        POI_COLORS.forEach((c) => {
+          const sw = document.createElement('button');
+          sw.type = 'button';
+          sw.className = 'swatch' + (poi.color.key === c.key ? ' active' : '');
+          sw.style.background = c.hex;
+          sw.title = c.name;
+          sw.addEventListener('click', () => {
+            poi.color = c;
+            renderPoisUI();
+          });
+          palRow.appendChild(sw);
+        });
+
+        card.appendChild(head);
+        card.appendChild(coordRow);
+        card.appendChild(palRow);
+        poisGrid.appendChild(card);
+      });
+
+      const addPoiBtn = document.createElement('button');
+      addPoiBtn.type = 'button';
+      addPoiBtn.className = 'add-slot-btn poi-add';
+      addPoiBtn.innerHTML = '<span>+1 POI</span><span style="font-size:11px;font-weight:600;">(lub wklej lat, lon)</span>';
+      addPoiBtn.title = 'Dodaj nowy punkt POI (możesz wkleić współrzędne albo kliknąć 🎯 na mapie)';
+      addPoiBtn.addEventListener('click', () => {
+        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
+        addPoiItem({ name: `POI #${pois.length + 1}`, lat, lon });
+      });
+      poisGrid.appendChild(addPoiBtn);
+    }
+
     function onTracksChanged() {
       const active = getActiveSlots();
       renderSlotsUI();
+      renderPoisUI();
       if (active.length === 0) {
+        setPickMode(null);
         dropOverlay.classList.remove('hidden');
+        addPoiMapBtn.disabled = true;
         flipBtn.disabled = true;
         randomAllBtn.disabled = true;
         recordBtn.disabled = true;
@@ -1144,6 +1453,7 @@
       }
 
       dropOverlay.classList.add('hidden');
+      addPoiMapBtn.disabled = false;
       flipBtn.disabled = false;
       randomAllBtn.disabled = false;
       recordBtn.disabled = false;
@@ -1166,7 +1476,25 @@
         }
         try {
           const text = await files[i].text();
-          slots[targetIdx].track = parseSingleGPX(text, files[i].name);
+          const parsed = parseSingleGPX(text, files[i].name);
+          slots[targetIdx].track = parsed;
+
+          // Usuń stare auto-POI dla tego slotu i wczytaj nowe <wpt>, jeśli plik GPX je ma
+          pois = pois.filter((p) => p.sourceSlot !== targetIdx);
+          for (const w of parsed.importedWpts) {
+            pois.push({
+              id: nextPoiId++,
+              name: w.name,
+              lat: w.lat,
+              lon: w.lon,
+              wx: lonToWorldX(w.lon),
+              wy: latToWorldY(w.lat),
+              color: slots[targetIdx].color,
+              icon: 'pin',
+              sourceSlot: targetIdx,
+              trackMatches: []
+            });
+          }
         } catch (err) {
           alert(err.message);
         }
@@ -1175,7 +1503,6 @@
       onTracksChanged();
     }
 
-    // Wylicza geometrię sekcji ekranu: w pionie 9:16 legenda ma własny górny pas (zero zasłaniania mapy)
     function getMapViewport() {
       const W = canvas.width;
       const H = canvas.height;
@@ -1233,7 +1560,6 @@
       const midWy = (minWy + maxWy) / 2;
       const maxZ = MAP_PROVIDERS[inMapStyle.value].maxZ;
 
-      // Gdy legenda jest ukryta -> maksymalny zoom i wycentrowanie na pełnej mapie
       if (!showLegend) {
         const zx = Math.log2((mapW * 0.90) / (spanX * 256));
         const zy = Math.log2((mapH * 0.88) / (spanY * 256));
@@ -1242,7 +1568,6 @@
         return;
       }
 
-      // W pionie 9:16 legenda jest nad mapą (topHudH), więc mapa ma 100% wolnego kadru poniżej
       if (isPortrait) {
         const zx = Math.log2((mapW * 0.86) / (spanX * 256));
         const zy = Math.log2((mapH * 0.84) / (spanY * 256));
@@ -1251,17 +1576,13 @@
         return;
       }
 
-      // W 16:9 / 1:1 przy widocznej legendzie w prawym górnym rogu:
-      // wybierz lepszy bezpieczny obszar (poniżej legendy LUB na lewo od legendy), żeby nie zasłaniała tracków
       const hud = getFloatingHudDimensions(mapW, unitSize, active.length);
       const mPad = Math.max(24, mapW * 0.03);
 
-      // Obszar A: poniżej legendy (pełna szerokość)
       const areaA = {
         x0: mPad, x1: mapW - mPad,
         y0: mapY + hud.pad + hud.boxH + 18, y1: mapY + mapH - mPad
       };
-      // Obszar B: na lewo od legendy (pełna wysokość)
       const areaB = {
         x0: mPad, x1: mapW - hud.pad - hud.boxW - 18,
         y0: mapY + mPad, y1: mapY + mapH - mPad
@@ -1480,34 +1801,32 @@
       ctx.restore();
     }
 
-    function drawDotLabel(bx, by, unitSize, mapY, mapW, mapH, colorObj, name) {
-      const text = (name || '').trim();
-      if (!text) return;
-
-      const r = unitSize * 0.0088;
-      const fontSize = Math.max(11, Math.round(unitSize * 0.0082));
+    function drawFloatingPill(x, y, offsetY, unitSize, mapY, mapW, mapH, borderColor, text, isSubtle = false) {
+      const clean = (text || '').trim();
+      if (!clean) return;
+      const fontSize = Math.max(11, Math.round(unitSize * (isSubtle ? 0.0076 : 0.0082)));
 
       ctx.save();
       ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
 
-      let shown = text;
+      let shown = clean;
       const maxW = unitSize * 0.14;
       while (ctx.measureText(shown).width > maxW && shown.length > 3) {
         shown = shown.slice(0, -2) + '…';
       }
 
       const padX = 7;
-      const pillH = fontSize + 8;
+      const pillH = fontSize + 7;
       const pillW = ctx.measureText(shown).width + padX * 2;
 
-      let lx = bx - pillW / 2;
+      let lx = x - pillW / 2;
       lx = Math.max(6, Math.min(mapW - pillW - 6, lx));
 
-      let ly = by - r - pillH - 6;
-      if (ly < mapY + 6) ly = Math.min(mapY + mapH - pillH - 6, by + r + 6);
+      let ly = y - offsetY - pillH;
+      if (ly < mapY + 6) ly = Math.min(mapY + mapH - pillH - 6, y + offsetY);
 
-      ctx.fillStyle = 'rgba(11, 19, 17, 0.86)';
-      ctx.strokeStyle = colorObj.hex;
+      ctx.fillStyle = isSubtle ? 'rgba(11, 19, 17, 0.78)' : 'rgba(11, 19, 17, 0.88)';
+      ctx.strokeStyle = borderColor;
       ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.roundRect(lx, ly, pillW, pillH, 6);
@@ -1518,6 +1837,90 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(shown, lx + pillW / 2, ly + pillH / 2 + 0.5);
+      ctx.restore();
+    }
+
+    // Rysowanie wybranej ikony POI na mapie (romb, pinezka, flaga, cel, kropka)
+    function drawPoiMarker(x, y, unitSize, poi) {
+      const r = unitSize * 0.0082;
+      const hex = poi.color.hex;
+      const outline = poi.color.key === 'white' ? '#111827' : '#ffffff';
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = hex;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = 2;
+
+      if (poi.icon === 'diamond') {
+        ctx.beginPath();
+        ctx.moveTo(x, y - r * 1.15);
+        ctx.lineTo(x + r * 1.15, y);
+        ctx.lineTo(x, y + r * 1.15);
+        ctx.lineTo(x - r * 1.15, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+      } else if (poi.icon === 'pin') {
+        const pr = r * 1.05;
+        ctx.beginPath();
+        ctx.arc(x, y - pr * 1.2, pr, Math.PI * 0.8, Math.PI * 0.2, false);
+        ctx.lineTo(x, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+        ctx.fillStyle = outline;
+        ctx.beginPath();
+        ctx.arc(x, y - pr * 1.2, pr * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (poi.icon === 'flag') {
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x, y + r * 0.4);
+        ctx.lineTo(x, y - r * 2.1);
+        ctx.stroke();
+
+        ctx.fillStyle = hex;
+        ctx.beginPath();
+        ctx.moveTo(x, y - r * 2.1);
+        ctx.lineTo(x + r * 1.8, y - r * 1.5);
+        ctx.lineTo(x, y - r * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      } else if (poi.icon === 'target') {
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.05, 0, Math.PI * 2);
+        ctx.strokeStyle = hex;
+        ctx.lineWidth = 2.4;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(x - r * 1.4, y); ctx.lineTo(x - r * 0.5, y);
+        ctx.moveTo(x + r * 0.5, y); ctx.lineTo(x + r * 1.4, y);
+        ctx.moveTo(x, y - r * 1.4); ctx.lineTo(x, y - r * 0.5);
+        ctx.moveTo(x, y + r * 0.5); ctx.lineTo(x, y + r * 1.4);
+        ctx.stroke();
+        ctx.fillStyle = hex;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
 
@@ -1561,6 +1964,7 @@
       if (!active.length) return;
 
       const cam = getCameraAtTime(globalT);
+      lastCam = cam;
       const styleKey = inMapStyle.value;
       const provider = MAP_PROVIDERS[styleKey];
       const pxScale = Math.pow(2, cam.z) * 256;
@@ -1570,7 +1974,7 @@
         y: mapY + mapH / 2 + (wy - cam.wy) * pxScale
       });
 
-      // 1. Podkład mapy w obszarze [0, mapY, mapW, mapH]
+      // 1. Podkład mapy
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, mapY, mapW, mapH);
@@ -1619,7 +2023,7 @@
         st: getTrackStateAtSimTime(slot.track, currentSimMs)
       }));
 
-      // 2. Efekt rysowania śladu dopiero po przejechaniu kropki
+      // 2. Ślady tracków (rysują się progresywnie za kropkami)
       for (const { slot, st } of states) {
         const trk = slot.track;
         const col = slot.color;
@@ -1659,7 +2063,18 @@
         }
       }
 
-      // 3. Kropki ponad liniami + etykiety tekstowe
+      // 3. Punkty POI na mapie (pod kropkami tracków)
+      const showPois = inShowPoi.checked;
+      if (showPois && pois.length > 0) {
+        for (const poi of pois) {
+          const psp = worldToScreen(poi.wx, poi.wy);
+          drawPoiMarker(psp.x, psp.y, unitSize, poi);
+          const lblOff = poi.icon === 'pin' || poi.icon === 'flag' ? unitSize * 0.022 : unitSize * 0.013;
+          drawFloatingPill(psp.x, psp.y, lblOff, unitSize, mapY, mapW, mapH, poi.color.hex, poi.name, true);
+        }
+      }
+
+      // 4. Poruszające się kropki tracków i ich etykiety na samym wierzchu
       for (const { slot, st } of states) {
         const dotSp = worldToScreen(st.wx, st.wy);
         const alpha = getDotAlpha(st.progress, st.status);
@@ -1667,7 +2082,7 @@
       }
       for (const { slot, st } of states) {
         const dotSp = worldToScreen(st.wx, st.wy);
-        drawDotLabel(dotSp.x, dotSp.y, unitSize, mapY, mapW, mapH, slot.color, slot.track.name);
+        drawFloatingPill(dotSp.x, dotSp.y, unitSize * 0.014, unitSize, mapY, mapW, mapH, slot.color.hex, slot.track.name, false);
       }
 
       // Atrybucja mapy
@@ -1682,7 +2097,7 @@
 
       ctx.restore();
 
-      // 4. Wspólny wykres wysokości wszystkich tracków
+      // 5. Wspólny wykres wysokości wszystkich tracków + zsynchronizowane POI na wykresie
       if (showElev && elevH > 0) {
         const py0 = mapY + mapH;
         ctx.save();
@@ -1697,7 +2112,7 @@
 
         const padL = W * 0.055;
         const padR = W * 0.025;
-        const padT = elevH * 0.14;
+        const padT = elevH * 0.16;
         const padB = elevH * 0.18;
         const plotW = W - padL - padR;
         const plotH = elevH - padT - padB;
@@ -1766,6 +2181,47 @@
           ctx.stroke();
         }
 
+        // Opcjonalna synchronizacja POI z wykresem (gdy track dojedzie do współrzędnych POI)
+        if (showPois && inShowPoiOnElev.checked && pois.length > 0) {
+          for (const poi of pois) {
+            for (const m of poi.trackMatches) {
+              const found = states.find((s) => s.slot === m.slot);
+              if (!found || found.st.km < m.km) continue;
+              const px = kmToX(m.km);
+              const py = eleToY(m.ele);
+
+              ctx.save();
+              ctx.strokeStyle = `${poi.color.hex}88`;
+              ctx.lineWidth = 1.4;
+              ctx.setLineDash([3, 3]);
+              ctx.beginPath();
+              ctx.moveTo(px, plotY0);
+              ctx.lineTo(px, py);
+              ctx.stroke();
+              ctx.setLineDash([]);
+
+              ctx.fillStyle = poi.color.hex;
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.8;
+              ctx.beginPath();
+              ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+
+              // Mała etykietka POI u góry wykresu
+              const lbl = (poi.name || '').trim().slice(0, 14);
+              if (lbl) {
+                ctx.font = `700 ${Math.max(9, Math.round(unitSize * 0.0062))}px Inter, system-ui, sans-serif`;
+                ctx.fillStyle = '#e2e8f0';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                ctx.fillText(lbl, px, plotY0 - 2);
+              }
+              ctx.restore();
+            }
+          }
+        }
+
         ctx.fillStyle = '#94a8a0';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -1778,7 +2234,7 @@
         ctx.restore();
       }
 
-      // 5. Legenda (tylko gdy włączona)
+      // 6. Legenda
       if (showLegend) {
         if (isPortrait) {
           drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states);
@@ -1788,7 +2244,6 @@
       }
     }
 
-    // Dedykowany górny pas legendy w formacie 9:16 (nigdy nie zasłania mapy ani tracków)
     function drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states) {
       const cols = states.length >= 4 ? 2 : 1;
       const headerH = Math.round(unitSize * 0.022);
@@ -1915,7 +2370,8 @@
 
     function updateStatusLine() {
       const active = getActiveSlots();
-      statusText.textContent = `Załadowano ${active.length} tras • Najdłuższa: ${globalMaxKm.toFixed(1)} km — kliknij „2. Generuj video”.`;
+      const poiTxt = pois.length ? ` • ${pois.length} POI` : '';
+      statusText.textContent = `Załadowano ${active.length} tras${poiTxt} • Najdłuższa: ${globalMaxKm.toFixed(1)} km — kliknij „2. Generuj video”.`;
     }
 
     function loop(ts) {
@@ -1933,6 +2389,45 @@
       startTime = null;
       rafId = requestAnimationFrame(loop);
     }
+
+    // --- Zdarzenia UI i klikanie na mapę (dodawanie / przenoszenie POI) ---
+    canvas.addEventListener('click', (e) => {
+      if (!mapPickMode || !getActiveSlots().length) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = ((e.clientX - rect.left) / rect.width) * canvas.width;
+      const cy = ((e.clientY - rect.top) / rect.height) * canvas.height;
+      const { mapY, mapW, mapH } = getMapViewport();
+      if (cx < 0 || cx > mapW || cy < mapY || cy > mapY + mapH) return;
+
+      const pxScale = Math.pow(2, lastCam.z) * 256;
+      const wx = lastCam.wx + (cx - mapW / 2) / pxScale;
+      const wy = lastCam.wy + (cy - (mapY + mapH / 2)) / pxScale;
+      const [lon, lat] = worldToLonLat(wx, wy);
+
+      if (mapPickMode === 'add') {
+        addPoiItem({ name: `POI #${pois.length + 1}`, lat, lon });
+        updateStatusLine();
+      } else if (typeof mapPickMode === 'number') {
+        const poi = pois.find((p) => p.id === mapPickMode);
+        if (poi) {
+          poi.lat = lat;
+          poi.lon = lon;
+          poi.wx = wx;
+          poi.wy = wy;
+          syncPoisWithTracks();
+        }
+        setPickMode(null);
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && mapPickMode !== null) setPickMode(null);
+    });
+
+    addPoiMapBtn.addEventListener('click', () => {
+      if (!getActiveSlots().length) return;
+      setPickMode(mapPickMode === 'add' ? null : 'add');
+    });
 
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length) loadFilesIntoSlots(e.target.files, null);
@@ -2017,6 +2512,7 @@
 
     recordBtn.addEventListener('click', async () => {
       if (!getActiveSlots().length || isRecording) return;
+      setPickMode(null);
 
       isRecording = true;
       recordBtn.disabled = true;
@@ -2077,6 +2573,7 @@
     });
 
     renderSlotsUI();
+    renderPoisUI();
   </script>
 </body>
 </html>
