@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>Generator animacji tras (GPX + OSM)</title>
+  <title>Generator Animacji tras GPX by Radzio</title>
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     :root {
@@ -50,25 +50,163 @@
     .title strong { font-size: 16px; }
     .status { font-size: 12px; color: var(--muted); }
 
-    .controls, .inputs, .tracks-bar {
+    .controls, .inputs {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
     }
-    .tracks-bar:empty { display: none; }
-    .track-chip {
-      display: inline-flex;
+
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 7px;
+      width: 100%;
+    }
+    .slot-card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-height: 70px;
+      justify-content: center;
+    }
+    .slot-card.empty {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.2);
       align-items: center;
-      gap: 6px;
+      cursor: pointer;
+      color: var(--muted);
       font-size: 12px;
-      background: rgba(255, 255, 255, 0.06);
+      font-weight: 600;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .slot-card.empty:hover {
+      background: rgba(249, 115, 22, 0.08);
+      border-color: rgba(249, 115, 22, 0.55);
+      color: var(--text);
+    }
+    .empty-remove {
+      position: absolute;
+      top: 5px;
+      right: 6px;
+      background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 4px 10px;
-      border-radius: 999px;
+      color: var(--muted);
+      border-radius: 5px;
+      padding: 0 5px;
+      font-size: 11px;
+      line-height: 1.4;
       cursor: pointer;
     }
-    .track-chip input { accent-color: #f97316; }
+    .empty-remove:hover { color: #fff; background: rgba(255, 255, 255, 0.2); }
+
+    .add-slot-btn {
+      appearance: none;
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px dashed rgba(249, 115, 22, 0.55);
+      color: #fdba74;
+      border-radius: 10px;
+      min-height: 70px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s ease, transform 0.12s ease;
+    }
+    .add-slot-btn:hover {
+      background: rgba(249, 115, 22, 0.22);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .slot-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+    }
+    .slot-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      flex: 1;
+    }
+    .slot-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .slot-name-input {
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      padding: 2px 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      width: 100%;
+      min-width: 0;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .slot-name-input:focus {
+      border-color: #f97316;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    .slot-mini-btns {
+      display: flex;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+    .mini-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 11px;
+      cursor: pointer;
+      line-height: 1.3;
+    }
+    .mini-btn:hover { background: rgba(255, 255, 255, 0.18); }
+    .slot-meta {
+      font-size: 10.5px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .palette-row {
+      display: flex;
+      align-items: center;
+      gap: 3.5px;
+      flex-wrap: wrap;
+    }
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      padding: 0;
+      transition: transform 0.1s ease;
+    }
+    .swatch:hover { transform: scale(1.18); }
+    .swatch.active {
+      border-color: #ffffff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+      transform: scale(1.12);
+    }
 
     label.field {
       display: flex;
@@ -80,8 +218,28 @@
       padding: 5px 10px;
       border-radius: 9px;
       border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
     }
-    label.field input, label.field select {
+    label.field input[type="checkbox"] {
+      accent-color: #f97316;
+      cursor: pointer;
+      margin: 0;
+    }
+    label.field input[type="number"] {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      width: 56px;
+      padding: 2px 6px;
+      outline: none;
+    }
+    label.field input[type="number"]:focus {
+      border-color: #f97316;
+    }
+    label.field select {
       background: transparent;
       border: none;
       color: var(--text);
@@ -89,8 +247,6 @@
       font-weight: 600;
       outline: none;
     }
-    label.field input[type="number"] { width: 70px; }
-    label.field input[type="text"] { width: 160px; }
     label.field select option { background: #13201c; color: var(--text); }
 
     button.action, .file-btn {
@@ -154,13 +310,12 @@
       border: 2px dashed rgba(249, 115, 22, 0.65);
       border-radius: 18px;
       padding: 40px 48px;
-      max-width: 560px;
+      max-width: 580px;
       background: rgba(249, 115, 22, 0.07);
     }
     .drop-box h2 { margin: 0 0 8px; font-size: 21px; }
     .drop-box p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
 
-    /* Bufor WebGL dla Dark Mode zamknięty w 1x1 px pod canvasem (nigdy nie przebija w tle strony) */
     #mlMapWrap {
       position: absolute;
       top: 0;
@@ -183,29 +338,22 @@
   <div class="toolbar">
     <div class="row">
       <div class="title">
-        <strong>Generator animacji tras (GPX + OSM)</strong>
-        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx (przeciągnij tutaj lub kliknij „1. Wgraj GPX”).</span>
+        <strong>Generator Animacji tras GPX by Radzio</strong>
+        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx lub kliknij „+1”, aby dodać kolejne pola.</span>
       </div>
       <div class="controls">
         <label class="file-btn" for="fileInput">1. Wgraj GPX</label>
-        <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
+        <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple />
+        <input id="slotFileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
 
-        <button class="action" id="flipBtn" title="Odwróć kierunek trasy" disabled>⇄ Odwróć</button>
+        <button class="action" id="flipBtn" title="Odwróć kierunek wszystkich tras" disabled>⇄ Odwróć</button>
+        <button class="action" id="randomAllBtn" title="Przypisz losowe kolory wszystkim trasom" disabled>🎲 Random</button>
         <button class="action primary" id="recordBtn" disabled>2. Generuj video</button>
       </div>
     </div>
 
     <div class="row">
       <div class="inputs">
-        <label class="field">Nazwa:
-          <input id="inTitle" type="text" value="MOJA TRASA" />
-        </label>
-        <label class="field">Dystans (km):
-          <input id="inKm" type="number" step="0.1" min="0.1" value="0" />
-        </label>
-        <label class="field">W górę (m):
-          <input id="inGain" type="number" step="1" min="0" value="0" />
-        </label>
         <label class="field">Mapa:
           <select id="inMapStyle">
             <option value="osm" selected>OpenStreetMap</option>
@@ -225,29 +373,27 @@
             <option value="1080x1080">1:1 (Kwadrat)</option>
           </select>
         </label>
-        <label class="field">Kolor animacji:
-          <select id="inColor">
-            <option value="orange" selected>Pomarańczowy</option>
-            <option value="purple">Fioletowy</option>
-            <option value="blue">Niebieski</option>
-            <option value="green">Zielony</option>
-            <option value="red">Czerwony</option>
-            <option value="yellow">Żółty</option>
-            <option value="teal">Turkusowy</option>
+        <label class="field" title="Sposób synchronizacji czasu między wieloma plikami GPX">Czas jazdy:
+          <select id="inTimeSync">
+            <option value="clock" selected>Wg godziny (start/koniec z GPX)</option>
+            <option value="relative">Wspólny start (00:00)</option>
           </select>
         </label>
-        <label class="field">Czas:
-          <select id="inDuration">
-            <option value="6000">6 s</option>
-            <option value="9000" selected>9 s</option>
-            <option value="12000">12 s</option>
-            <option value="15000">15 s</option>
-          </select>
+        <label class="field" title="Wpisz własną długość animacji w sekundach">Czas animacji (s):
+          <input id="inDuration" type="number" min="1" max="300" step="1" value="9" />
+        </label>
+        <label class="field" title="Pokaż lub ukryj wykres profilu wysokości u dołu">
+          <input id="inShowElev" type="checkbox" checked />
+          <span>Wykres wysokości</span>
+        </label>
+        <label class="field" title="Pokaż lub ukryj legendę na mapie">
+          <input id="inShowLegend" type="checkbox" checked />
+          <span>Legenda</span>
         </label>
       </div>
     </div>
 
-    <div class="tracks-bar" id="tracksBar"></div>
+    <div class="slots-grid" id="slotsGrid"></div>
   </div>
 
   <div class="stage-wrap" id="dropZone">
@@ -255,8 +401,8 @@
     <canvas id="canvas" width="1600" height="900"></canvas>
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
-        <h2>1. Wrzuć plik .gpx</h2>
-        <p>Przeciągnij tutaj plik <b>.gpx</b> wyeksportowany z Veloplannera, Stravy lub Garmina.<br>Po wgraniu zobaczysz ślad na mapie, a przycisk <b>„2. Generuj video”</b> zapisze gotowy film.</p>
+        <h2>1. Wrzuć pliki .gpx</h2>
+        <p>Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>+1</b>.<br>Każdy track rysuje się w swoim tempie kolorową kropką z nazwą podążającą obok.</p>
       </div>
     </div>
   </div>
@@ -267,31 +413,35 @@
     const mlMapWrap = document.getElementById('mlMapWrap');
     const mlContainer = document.getElementById('mlMap');
     const fileInput = document.getElementById('fileInput');
+    const slotFileInput = document.getElementById('slotFileInput');
     const dropZone = document.getElementById('dropZone');
     const dropOverlay = document.getElementById('dropOverlay');
-    const tracksBar = document.getElementById('tracksBar');
+    const slotsGrid = document.getElementById('slotsGrid');
 
     const flipBtn = document.getElementById('flipBtn');
+    const randomAllBtn = document.getElementById('randomAllBtn');
     const recordBtn = document.getElementById('recordBtn');
     const statusText = document.getElementById('statusText');
 
-    const inTitle = document.getElementById('inTitle');
-    const inKm = document.getElementById('inKm');
-    const inGain = document.getElementById('inGain');
     const inMapStyle = document.getElementById('inMapStyle');
     const inAspect = document.getElementById('inAspect');
-    const inColor = document.getElementById('inColor');
+    const inTimeSync = document.getElementById('inTimeSync');
     const inDuration = document.getElementById('inDuration');
+    const inShowElev = document.getElementById('inShowElev');
+    const inShowLegend = document.getElementById('inShowLegend');
 
-    const PALETTES = {
-      orange: { hex: '#f97316', core: '#ffdfba' },
-      purple: { hex: '#a855f7', core: '#f3e8ff' },
-      blue:   { hex: '#3b82f6', core: '#dbeafe' },
-      green:  { hex: '#22c55e', core: '#dcfce7' },
-      red:    { hex: '#ef4444', core: '#fecaca' },
-      yellow: { hex: '#eab308', core: '#fef9c3' },
-      teal:   { hex: '#14b8a6', core: '#ccfbf1' }
-    };
+    const BASIC_COLORS = [
+      { key: 'orange', name: 'Pomarańczowy', hex: '#f97316', core: '#ffdfba' },
+      { key: 'purple', name: 'Fioletowy',    hex: '#a855f7', core: '#f3e8ff' },
+      { key: 'blue',   name: 'Niebieski',    hex: '#3b82f6', core: '#dbeafe' },
+      { key: 'green',  name: 'Zielony',      hex: '#22c55e', core: '#dcfce7' },
+      { key: 'red',    name: 'Czerwony',     hex: '#ef4444', core: '#fecaca' },
+      { key: 'yellow', name: 'Żółty',        hex: '#eab308', core: '#fef9c3' },
+      { key: 'teal',   name: 'Turkusowy',    hex: '#14b8a6', core: '#ccfbf1' },
+      { key: 'pink',   name: 'Różowy',       hex: '#ec4899', core: '#fce7f3' },
+      { key: 'lime',   name: 'Limonkowy',    hex: '#84cc16', core: '#ecfccb' },
+      { key: 'sky',    name: 'Błękitny',     hex: '#0ea5e9', core: '#e0f2fe' }
+    ];
 
     const MAP_PROVIDERS = {
       osm: {
@@ -355,79 +505,45 @@
         }
       },
       layers: [
+        { id: 'background', type: 'background', paint: { 'background-color': '#182028' } },
         {
-          id: 'background',
-          type: 'background',
-          paint: { 'background-color': '#182028' }
-        },
-        {
-          id: 'landuse_urban',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'landuse',
+          id: 'landuse_urban', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
           filter: ['in', 'class', 'residential', 'commercial', 'industrial', 'retail', 'suburb', 'neighbourhood'],
           paint: { 'fill-color': '#2b3438', 'fill-opacity': 0.9 }
         },
         {
-          id: 'landcover_grass_wood',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'landcover',
+          id: 'landcover_grass_wood', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
           filter: ['in', 'class', 'grass', 'wood', 'wetland', 'farmland'],
           paint: { 'fill-color': '#3e4b3c', 'fill-opacity': 0.85 }
         },
         {
-          id: 'park',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'park',
+          id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park',
           paint: { 'fill-color': '#495742', 'fill-opacity': 0.78 }
         },
         {
-          id: 'landuse_green',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'landuse',
+          id: 'landuse_green', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
           filter: ['in', 'class', 'park', 'grass', 'cemetery', 'recreation_ground', 'pitch', 'stadium'],
           paint: { 'fill-color': '#495742', 'fill-opacity': 0.82 }
         },
         {
-          id: 'landuse_rail_yard',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'landuse',
+          id: 'landuse_rail_yard', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
           filter: ['==', 'class', 'railway'],
           paint: { 'fill-color': '#232c3b', 'fill-opacity': 0.95 }
         },
         {
-          id: 'aeroway_area',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'aeroway',
+          id: 'aeroway_area', type: 'fill', source: 'openmaptiles', 'source-layer': 'aeroway',
           paint: { 'fill-color': '#222a34' }
         },
         {
-          id: 'water',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'water',
+          id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water',
           paint: { 'fill-color': '#162432' }
         },
         {
-          id: 'waterway',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'waterway',
-          paint: {
-            'line-color': '#21364a',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 15, 3]
-          }
+          id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway',
+          paint: { 'line-color': '#21364a', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 15, 3] }
         },
         {
-          id: 'road_casing_dark',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'transportation',
+          id: 'road_casing_dark', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
           filter: ['all', ['!=', 'class', 'rail'], ['!=', 'class', 'transit'], ['!=', 'class', 'ferry']],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
@@ -441,21 +557,11 @@
           }
         },
         {
-          id: 'building',
-          type: 'fill',
-          source: 'openmaptiles',
-          'source-layer': 'building',
-          paint: {
-            'fill-color': '#3e444a',
-            'fill-outline-color': '#1e242b',
-            'fill-opacity': 0.88
-          }
+          id: 'building', type: 'fill', source: 'openmaptiles', 'source-layer': 'building',
+          paint: { 'fill-color': '#3e444a', 'fill-outline-color': '#1e242b', 'fill-opacity': 0.88 }
         },
         {
-          id: 'road_gold_lines',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'transportation',
+          id: 'road_gold_lines', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
           filter: ['all', ['!=', 'class', 'rail'], ['!=', 'class', 'transit'], ['!=', 'class', 'ferry'], ['!=', 'brunnel', 'bridge']],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
@@ -476,10 +582,7 @@
           }
         },
         {
-          id: 'railway_lines',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'transportation',
+          id: 'railway_lines', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
           filter: ['in', 'class', 'rail', 'transit'],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
@@ -489,10 +592,7 @@
           }
         },
         {
-          id: 'bridge_copper',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'transportation',
+          id: 'bridge_copper', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
           filter: ['all', ['==', 'brunnel', 'bridge'], ['!=', 'class', 'rail']],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: {
@@ -507,54 +607,56 @@
           }
         },
         {
-          id: 'admin_boundary',
-          type: 'line',
-          source: 'openmaptiles',
-          'source-layer': 'boundary',
+          id: 'admin_boundary', type: 'line', source: 'openmaptiles', 'source-layer': 'boundary',
           filter: ['<=', 'admin_level', 4],
-          paint: {
-            'line-color': '#64748b',
-            'line-width': 1,
-            'line-dasharray': [3, 2],
-            'line-opacity': 0.45
-          }
+          paint: { 'line-color': '#64748b', 'line-width': 1, 'line-dasharray': [3, 2], 'line-opacity': 0.45 }
         }
       ]
     };
 
-    // Stan GPX i trasy
-    let gpxTracks = [];
-    let gpxWaypoints = [];
-    let activePts = [];
-    let activePOIs = [];
-    let hasElevation = false;
-    let totalKm = 0;
-    let totalGain = 0;
-    let minEle = 0;
-    let maxEle = 100;
-    let isLoopRoute = false;
+    function createSlot(idx) {
+      return {
+        track: null,
+        color: BASIC_COLORS[idx % BASIC_COLORS.length]
+      };
+    }
 
-    // Stan mapy i kamery
+    const slots = [createSlot(0)];
+    let pendingSlotIndex = 0;
+
+    let globalMaxKm = 1;
+    let globalHasElevation = false;
+    let globalMinEle = 0;
+    let globalMaxEle = 100;
+    let globalStartMs = 0;
+    let globalEndMs = 1;
+    let globalSpanMs = 1;
+    let useClockLabels = false;
+
     let overviewCam = { wx: 0.5, wy: 0.5, z: 6 };
     const tileCache = new Map();
     let osmBlockedNotified = false;
     let mlMap = null;
     let mlReady = false;
 
-    // Stan animacji
     let startTime = null;
     let rafId = null;
     let isRecording = false;
 
-    const bikeLayer = document.createElement('canvas');
-    bikeLayer.width = 150;
-    bikeLayer.height = 150;
-    const bikeCtx = bikeLayer.getContext('2d');
+    const dotLayer = document.createElement('canvas');
+    dotLayer.width = 96;
+    dotLayer.height = 96;
+    const dotCtx = dotLayer.getContext('2d');
 
     const tileCheckCanvas = document.createElement('canvas');
     tileCheckCanvas.width = 256;
     tileCheckCanvas.height = 256;
     const tileCheckCtx = tileCheckCanvas.getContext('2d', { willReadFrequently: true });
+
+    function getDurationMs() {
+      const sec = parseFloat(inDuration.value);
+      return Math.max(1, isNaN(sec) ? 9 : sec) * 1000;
+    }
 
     function isOsmBlockedTile(img) {
       try {
@@ -573,9 +675,7 @@
       }
     }
 
-    function lonToWorldX(lon) {
-      return (lon + 180) / 360;
-    }
+    function lonToWorldX(lon) { return (lon + 180) / 360; }
 
     function latToWorldY(lat) {
       const clamped = Math.max(-85.0511, Math.min(85.0511, lat));
@@ -596,6 +696,24 @@
       const a = Math.sin(dLat / 2) ** 2 +
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function formatClockHHMM(ms, isDuration = false) {
+      if (isDuration) {
+        const totalMin = Math.round(ms / 60000);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        return `${h}:${String(m).padStart(2, '0')}`;
+      }
+      const d = new Date(ms);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function formatMsOfDayHHMM(msOfDay) {
+      const totalMin = Math.floor((msOfDay % 86400000) / 60000);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     }
 
     function syncDarkModeVisibility() {
@@ -630,121 +748,48 @@
       return mlMap;
     }
 
-    // --- Parser GPX ---
-    function parseGPX(xmlText, fileName) {
+    function parseSingleGPX(xmlText, fileName) {
       const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
-      const parserErr = doc.querySelector('parsererror');
-      if (parserErr) throw new Error('Nieprawidłowy plik GPX.');
+      if (doc.querySelector('parsererror')) throw new Error(`Nieprawidłowy plik GPX: ${fileName}`);
 
       const metaName = doc.querySelector('metadata > name')?.textContent?.trim();
-      const tracks = [];
+      const firstTrkName = doc.querySelector('trk > name, rte > name')?.textContent?.trim();
+      const trackName = metaName || firstTrkName || fileName.replace(/\.gpx$/i, '');
 
-      doc.querySelectorAll('trk').forEach((trk, idx) => {
-        const tName = trk.querySelector('name')?.textContent?.trim() || `Etap ${idx + 1}`;
-        const pts = [];
-        trk.querySelectorAll('trkpt').forEach((pt) => {
-          const lat = parseFloat(pt.getAttribute('lat'));
-          const lon = parseFloat(pt.getAttribute('lon'));
-          const eleEl = pt.querySelector('ele');
-          const ele = eleEl ? parseFloat(eleEl.textContent) : null;
-          if (!isNaN(lat) && !isNaN(lon)) {
-            pts.push({ lat, lon, ele: (ele !== null && !isNaN(ele)) ? ele : null });
-          }
-        });
-        if (pts.length >= 2) tracks.push({ name: tName, pts, enabled: true });
-      });
+      let rawPts = [];
+      let ptNodes = [...doc.querySelectorAll('trkpt')];
+      if (ptNodes.length < 2) ptNodes = [...doc.querySelectorAll('rtept')];
 
-      if (tracks.length === 0) {
-        doc.querySelectorAll('rte').forEach((rte, idx) => {
-          const tName = rte.querySelector('name')?.textContent?.trim() || `Trasa ${idx + 1}`;
-          const pts = [];
-          rte.querySelectorAll('rtept').forEach((pt) => {
-            const lat = parseFloat(pt.getAttribute('lat'));
-            const lon = parseFloat(pt.getAttribute('lon'));
-            const eleEl = pt.querySelector('ele');
-            const ele = eleEl ? parseFloat(eleEl.textContent) : null;
-            if (!isNaN(lat) && !isNaN(lon)) {
-              pts.push({ lat, lon, ele: (ele !== null && !isNaN(ele)) ? ele : null });
-            }
-          });
-          if (pts.length >= 2) tracks.push({ name: tName, pts, enabled: true });
+      for (const pt of ptNodes) {
+        const lat = parseFloat(pt.getAttribute('lat'));
+        const lon = parseFloat(pt.getAttribute('lon'));
+        if (isNaN(lat) || isNaN(lon)) continue;
+        const eleText = pt.querySelector('ele')?.textContent;
+        const ele = eleText !== undefined ? parseFloat(eleText) : null;
+        const timeText = pt.querySelector('time')?.textContent?.trim();
+        const tMs = timeText ? Date.parse(timeText) : NaN;
+        rawPts.push({
+          lat,
+          lon,
+          ele: (ele !== null && !isNaN(ele)) ? ele : null,
+          tMs: !isNaN(tMs) ? tMs : null
         });
       }
 
-      if (tracks.length === 0) throw new Error('Nie znaleziono punktów trasy (<trkpt> ani <rtept>) w pliku GPX.');
+      if (rawPts.length < 2) throw new Error(`Brak punktów trasy w pliku: ${fileName}`);
 
-      const wpts = [];
-      doc.querySelectorAll('wpt').forEach((wpt) => {
-        const lat = parseFloat(wpt.getAttribute('lat'));
-        const lon = parseFloat(wpt.getAttribute('lon'));
-        const wName = wpt.querySelector('name')?.textContent?.trim() || 'POI';
-        const eleEl = wpt.querySelector('ele');
-        const ele = eleEl ? parseFloat(eleEl.textContent) : null;
-        if (!isNaN(lat) && !isNaN(lon)) wpts.push({ name: wName, lat, lon, ele });
-      });
-
-      gpxTracks = tracks;
-      gpxWaypoints = wpts;
-
-      const cleanTitle = metaName || (tracks.length === 1 ? tracks[0].name : fileName.replace(/\.gpx$/i, ''));
-      inTitle.value = cleanTitle;
-
-      renderTrackChips();
-      rebuildFromSelectedTracks();
-    }
-
-    function renderTrackChips() {
-      tracksBar.innerHTML = '';
-      if (gpxTracks.length <= 1) return;
-      gpxTracks.forEach((trk) => {
-        const lbl = document.createElement('label');
-        lbl.className = 'track-chip';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = trk.enabled;
-        cb.addEventListener('change', () => {
-          trk.enabled = cb.checked;
-          if (!gpxTracks.some((t) => t.enabled)) {
-            trk.enabled = true;
-            cb.checked = true;
-          }
-          rebuildFromSelectedTracks();
-        });
-        lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(`${trk.name} (${trk.pts.length} pkt)`));
-        tracksBar.appendChild(lbl);
-      });
-    }
-
-    function rebuildFromSelectedTracks() {
-      let combined = [];
-      for (const trk of gpxTracks) {
-        if (!trk.enabled) continue;
-        for (const p of trk.pts) {
-          combined.push({ ...p });
-        }
-      }
-      if (combined.length < 2) return;
-
-      if (combined.length > 3500) {
-        const step = Math.ceil(combined.length / 3500);
+      if (rawPts.length > 2500) {
+        const step = Math.ceil(rawPts.length / 2500);
         const sampled = [];
-        for (let i = 0; i < combined.length - 1; i += step) sampled.push(combined[i]);
-        sampled.push(combined[combined.length - 1]);
-        combined = sampled;
+        for (let i = 0; i < rawPts.length - 1; i += step) sampled.push(rawPts[i]);
+        sampled.push(rawPts[rawPts.length - 1]);
+        rawPts = sampled;
       }
 
-      processActivePoints(combined);
-    }
-
-    function processActivePoints(rawPts) {
-      hasElevation = rawPts.some((p) => p.ele !== null);
-
+      const hasEle = rawPts.some((p) => p.ele !== null);
       let cumKm = 0;
       const pts = rawPts.map((p, i) => {
-        if (i > 0) {
-          cumKm += haversineKm(rawPts[i - 1].lat, rawPts[i - 1].lon, p.lat, p.lon);
-        }
+        if (i > 0) cumKm += haversineKm(rawPts[i - 1].lat, rawPts[i - 1].lon, p.lat, p.lon);
         return {
           lat: p.lat,
           lon: p.lon,
@@ -752,18 +797,16 @@
           wy: latToWorldY(p.lat),
           ele: p.ele,
           smoothEle: p.ele,
-          km: cumKm,
-          progress: 0
+          tMs: p.tMs,
+          relMs: 0,
+          km: cumKm
         };
       });
 
-      totalKm = Math.max(0.01, cumKm);
-      for (const p of pts) p.progress = p.km / totalKm;
+      const totalKm = Math.max(0.01, cumKm);
 
-      totalGain = 0;
-      minEle = 0;
-      maxEle = 100;
-      if (hasElevation) {
+      let gain = 0, minE = 0, maxE = 100;
+      if (hasEle) {
         let lastE = pts.find((p) => p.ele !== null)?.ele ?? 0;
         for (const p of pts) {
           if (p.ele === null) p.ele = lastE;
@@ -778,111 +821,471 @@
           }
           pts[i].smoothEle = sum / cnt;
         }
-        minEle = Infinity;
-        maxEle = -Infinity;
-        let refEle = pts[0].smoothEle;
-        const threshold = 2.5;
+        minE = Infinity;
+        maxE = -Infinity;
+        let refE = pts[0].smoothEle;
         for (const p of pts) {
-          if (p.smoothEle < minEle) minEle = p.smoothEle;
-          if (p.smoothEle > maxEle) maxEle = p.smoothEle;
-          const diff = p.smoothEle - refEle;
-          if (diff >= threshold) {
-            totalGain += diff;
-            refEle = p.smoothEle;
-          } else if (diff <= -threshold) {
-            refEle = p.smoothEle;
+          if (p.smoothEle < minE) minE = p.smoothEle;
+          if (p.smoothEle > maxE) maxE = p.smoothEle;
+          const diff = p.smoothEle - refE;
+          if (diff >= 2.5) { gain += diff; refE = p.smoothEle; }
+          else if (diff <= -2.5) { refE = p.smoothEle; }
+        }
+      }
+
+      const timedIndices = [];
+      for (let i = 0; i < pts.length; i++) {
+        if (pts[i].tMs !== null) timedIndices.push(i);
+      }
+
+      let hasRealTime = timedIndices.length >= 2;
+      let rawStartMs = 0;
+      let rawEndMs = 0;
+
+      if (hasRealTime) {
+        const firstTIdx = timedIndices[0];
+        const lastTIdx = timedIndices[timedIndices.length - 1];
+        const totalTimedDur = Math.max(1000, pts[lastTIdx].tMs - pts[firstTIdx].tMs);
+        const totalTimedKm = Math.max(0.001, pts[lastTIdx].km - pts[firstTIdx].km);
+        const avgMsPerKm = totalTimedDur / totalTimedKm;
+
+        for (let i = 0; i < firstTIdx; i++) {
+          pts[i].tMs = pts[firstTIdx].tMs - (pts[firstTIdx].km - pts[i].km) * avgMsPerKm;
+        }
+        for (let i = lastTIdx + 1; i < pts.length; i++) {
+          pts[i].tMs = pts[lastTIdx].tMs + (pts[i].km - pts[lastTIdx].km) * avgMsPerKm;
+        }
+        for (let ti = 0; ti < timedIndices.length - 1; ti++) {
+          const a = timedIndices[ti], b = timedIndices[ti + 1];
+          if (b - a > 1) {
+            const dk = Math.max(1e-6, pts[b].km - pts[a].km);
+            const dt = pts[b].tMs - pts[a].tMs;
+            for (let k = a + 1; k < b; k++) {
+              pts[k].tMs = pts[a].tMs + ((pts[k].km - pts[a].km) / dk) * dt;
+            }
           }
         }
+        rawStartMs = pts[0].tMs;
+        rawEndMs = pts[pts.length - 1].tMs;
+        if (rawEndMs <= rawStartMs) hasRealTime = false;
+      }
+
+      if (!hasRealTime) {
+        const estDurMs = Math.max(60000, (totalKm / 20) * 3600 * 1000);
+        rawStartMs = 0;
+        rawEndMs = estDurMs;
+        for (const p of pts) {
+          p.tMs = (p.km / totalKm) * estDurMs;
+        }
+      }
+
+      const durationMs = Math.max(1000, rawEndMs - rawStartMs);
+      for (let i = 0; i < pts.length; i++) {
+        pts[i].relMs = Math.max(0, pts[i].tMs - rawStartMs);
+        if (i > 0 && pts[i].relMs < pts[i - 1].relMs) pts[i].relMs = pts[i - 1].relMs;
       }
 
       const gapKm = haversineKm(pts[0].lat, pts[0].lon, pts[pts.length - 1].lat, pts[pts.length - 1].lon);
-      isLoopRoute = gapKm < Math.max(0.4, totalKm * 0.025);
+      const isLoop = gapKm < Math.max(0.4, totalKm * 0.025);
 
-      activePts = pts;
-      inKm.value = totalKm.toFixed(1);
-      inGain.value = Math.round(totalGain);
+      return {
+        name: trackName,
+        pts,
+        totalKm,
+        gain,
+        hasEle,
+        minEle: minE,
+        maxEle: maxE,
+        hasRealTime,
+        rawStartMs,
+        rawEndMs,
+        durationMs,
+        simStartMs: 0,
+        simEndMs: durationMs,
+        isLoop
+      };
+    }
 
-      activePOIs = [];
-      const maxPoiDistKm = Math.max(1.5, totalKm * 0.04);
-      for (const w of gpxWaypoints) {
-        let bestIdx = 0, bestDist = Infinity;
-        for (let i = 0; i < pts.length; i++) {
-          const d = haversineKm(w.lat, w.lon, pts[i].lat, pts[i].lon);
-          if (d < bestDist) { bestDist = d; bestIdx = i; }
+    function reverseTrack(slotIdx) {
+      const trk = slots[slotIdx]?.track;
+      if (!trk || trk.pts.length < 2) return;
+      const rev = [...trk.pts].reverse();
+      let cumKm = 0;
+      const oldDur = trk.durationMs;
+      const oldRelTimes = trk.pts.map((p) => p.relMs);
+      for (let i = 0; i < rev.length; i++) {
+        if (i > 0) cumKm += haversineKm(rev[i - 1].lat, rev[i - 1].lon, rev[i].lat, rev[i].lon);
+        rev[i].km = cumKm;
+        rev[i].relMs = oldDur - oldRelTimes[trk.pts.length - 1 - i];
+      }
+      trk.pts = rev;
+      recomputeGlobalTimeline();
+      startAnimation();
+    }
+
+    function getActiveSlots() {
+      return slots.filter((s) => s.track !== null);
+    }
+
+    function recomputeGlobalTimeline() {
+      const active = getActiveSlots();
+      if (active.length === 0) return;
+
+      globalMaxKm = Math.max(0.1, ...active.map((s) => s.track.totalKm));
+      globalHasElevation = active.some((s) => s.track.hasEle);
+
+      if (globalHasElevation) {
+        const eleTracks = active.filter((s) => s.track.hasEle);
+        globalMinEle = Math.min(...eleTracks.map((s) => s.track.minEle));
+        globalMaxEle = Math.max(...eleTracks.map((s) => s.track.maxEle));
+        if (globalMaxEle - globalMinEle < 10) globalMaxEle = globalMinEle + 20;
+      }
+
+      const mode = inTimeSync.value;
+      const realTracks = active.filter((s) => s.track.hasRealTime);
+
+      if (mode === 'clock' && realTracks.length > 0) {
+        const minReal = Math.min(...realTracks.map((s) => s.track.rawStartMs));
+        const maxReal = Math.max(...realTracks.map((s) => s.track.rawEndMs));
+        const samePeriod = (maxReal - minReal) <= 36 * 3600 * 1000;
+
+        if (samePeriod) {
+          useClockLabels = 'epoch';
+          for (const s of active) {
+            if (s.track.hasRealTime) {
+              s.track.simStartMs = s.track.rawStartMs;
+              s.track.simEndMs = s.track.rawEndMs;
+            } else {
+              s.track.simStartMs = minReal;
+              s.track.simEndMs = minReal + s.track.durationMs;
+            }
+          }
+        } else {
+          useClockLabels = 'timeOfDay';
+          let earliestDayMs = Infinity;
+          for (const s of realTracks) {
+            const d = new Date(s.track.rawStartMs);
+            const msOfDay = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+            s.track.simStartMs = msOfDay;
+            s.track.simEndMs = msOfDay + s.track.durationMs;
+            if (msOfDay < earliestDayMs) earliestDayMs = msOfDay;
+          }
+          for (const s of active) {
+            if (!s.track.hasRealTime) {
+              s.track.simStartMs = earliestDayMs;
+              s.track.simEndMs = earliestDayMs + s.track.durationMs;
+            }
+          }
         }
-        if (bestDist <= maxPoiDistKm) {
-          activePOIs.push({
-            name: w.name,
-            wx: lonToWorldX(w.lon),
-            wy: latToWorldY(w.lat),
-            progress: pts[bestIdx].progress,
-            km: pts[bestIdx].km,
-            ele: w.ele !== null ? w.ele : pts[bestIdx].smoothEle
-          });
+      } else {
+        useClockLabels = false;
+        for (const s of active) {
+          s.track.simStartMs = 0;
+          s.track.simEndMs = s.track.durationMs;
         }
       }
+
+      globalStartMs = Math.min(...active.map((s) => s.track.simStartMs));
+      globalEndMs = Math.max(...active.map((s) => s.track.simEndMs));
+      globalSpanMs = Math.max(1000, globalEndMs - globalStartMs);
 
       computeOverviewCamera();
       preloadTiles();
       updateStatusLine();
-      startAnimation();
     }
 
-    function reverseRouteOrder() {
-      if (activePts.length < 2) return;
-      const rev = [...activePts].reverse();
-      let cumKm = 0;
-      for (let i = 0; i < rev.length; i++) {
-        if (i > 0) cumKm += haversineKm(rev[i - 1].lat, rev[i - 1].lon, rev[i].lat, rev[i].lon);
-        rev[i].km = cumKm;
-        rev[i].progress = cumKm / totalKm;
-      }
-      activePts = rev;
-      for (const poi of activePOIs) {
-        let bestIdx = 0, bestDist = Infinity;
-        for (let i = 0; i < activePts.length; i++) {
-          const d = (poi.wx - activePts[i].wx) ** 2 + (poi.wy - activePts[i].wy) ** 2;
-          if (d < bestDist) { bestDist = d; bestIdx = i; }
+    function renderSlotsUI() {
+      slotsGrid.innerHTML = '';
+      slots.forEach((slot, idx) => {
+        const card = document.createElement('div');
+        if (!slot.track) {
+          card.className = 'slot-card empty';
+          card.innerHTML = `<span>+ Wgraj GPX #${idx + 1}</span>`;
+          if (slots.length > 1) {
+            const remBtn = document.createElement('button');
+            remBtn.type = 'button';
+            remBtn.className = 'empty-remove';
+            remBtn.textContent = '×';
+            remBtn.title = 'Usuń ten pusty slot';
+            remBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              slots.splice(idx, 1);
+              renderSlotsUI();
+            });
+            card.appendChild(remBtn);
+          }
+          card.addEventListener('click', () => {
+            pendingSlotIndex = idx;
+            slotFileInput.value = '';
+            slotFileInput.click();
+          });
+          card.addEventListener('dragover', (e) => e.preventDefault());
+          card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.files[0]) loadFilesIntoSlots([e.dataTransfer.files[0]], idx);
+          });
+        } else {
+          const trk = slot.track;
+          card.className = 'slot-card';
+
+          const head = document.createElement('div');
+          head.className = 'slot-head';
+
+          const nameWrap = document.createElement('div');
+          nameWrap.className = 'slot-name-wrap';
+
+          const dot = document.createElement('span');
+          dot.className = 'slot-dot';
+          dot.style.background = slot.color.hex;
+
+          const nameInp = document.createElement('input');
+          nameInp.type = 'text';
+          nameInp.className = 'slot-name-input';
+          nameInp.value = trk.name;
+          nameInp.placeholder = `Track #${idx + 1}`;
+          nameInp.title = 'Wpisz własną nazwę (widoczną w legendzie i przy kropce)';
+          nameInp.addEventListener('input', () => { trk.name = nameInp.value; });
+
+          nameWrap.appendChild(dot);
+          nameWrap.appendChild(nameInp);
+
+          const miniBtns = document.createElement('div');
+          miniBtns.className = 'slot-mini-btns';
+
+          const revBtn = document.createElement('button');
+          revBtn.className = 'mini-btn';
+          revBtn.textContent = '⇄';
+          revBtn.title = 'Odwróć ten track';
+          revBtn.addEventListener('click', () => reverseTrack(idx));
+
+          const randBtn = document.createElement('button');
+          randBtn.className = 'mini-btn';
+          randBtn.textContent = '🎲';
+          randBtn.title = 'Losowy kolor dla tego tracka';
+          randBtn.addEventListener('click', () => {
+            const others = BASIC_COLORS.filter((c) => c.key !== slot.color.key);
+            slot.color = others[Math.floor(Math.random() * others.length)];
+            renderSlotsUI();
+          });
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'mini-btn';
+          delBtn.textContent = '×';
+          delBtn.title = 'Usuń ten plik GPX';
+          delBtn.addEventListener('click', () => {
+            if (slots.length > 1) slots.splice(idx, 1);
+            else slots[0].track = null;
+            onTracksChanged();
+          });
+
+          miniBtns.appendChild(revBtn);
+          miniBtns.appendChild(randBtn);
+          miniBtns.appendChild(delBtn);
+
+          head.appendChild(nameWrap);
+          head.appendChild(miniBtns);
+
+          const meta = document.createElement('div');
+          meta.className = 'slot-meta';
+          const durTxt = formatClockHHMM(trk.durationMs, true);
+          const timeRangeTxt = trk.hasRealTime
+            ? `${formatClockHHMM(trk.rawStartMs)}–${formatClockHHMM(trk.rawEndMs)}`
+            : `~${durTxt}`;
+          const eleInfo = trk.hasEle ? ` • ↑${Math.round(trk.gain)}m` : '';
+          meta.textContent = `${trk.totalKm.toFixed(1)} km${eleInfo} • ${timeRangeTxt}`;
+
+          const palRow = document.createElement('div');
+          palRow.className = 'palette-row';
+          BASIC_COLORS.forEach((c) => {
+            const sw = document.createElement('button');
+            sw.type = 'button';
+            sw.className = 'swatch' + (slot.color.key === c.key ? ' active' : '');
+            sw.style.background = c.hex;
+            sw.title = c.name;
+            sw.addEventListener('click', () => {
+              slot.color = c;
+              renderSlotsUI();
+            });
+            palRow.appendChild(sw);
+          });
+
+          card.appendChild(head);
+          card.appendChild(meta);
+          card.appendChild(palRow);
         }
-        poi.progress = activePts[bestIdx].progress;
-        poi.km = activePts[bestIdx].km;
+        slotsGrid.appendChild(card);
+      });
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'add-slot-btn';
+      addBtn.innerHTML = '<span>+1</span><span style="font-size:12px;font-weight:600;">Dodaj pole GPX</span>';
+      addBtn.title = 'Dodaj kolejne pole do wgrania pliku GPX';
+      addBtn.addEventListener('click', () => {
+        slots.push(createSlot(slots.length));
+        renderSlotsUI();
+      });
+      slotsGrid.appendChild(addBtn);
+    }
+
+    function onTracksChanged() {
+      const active = getActiveSlots();
+      renderSlotsUI();
+      if (active.length === 0) {
+        dropOverlay.classList.remove('hidden');
+        flipBtn.disabled = true;
+        randomAllBtn.disabled = true;
+        recordBtn.disabled = true;
+        statusText.textContent = 'Krok 1: Wgraj plik .gpx lub kliknij „+1”, aby dodać kolejne pola.';
+        if (rafId) cancelAnimationFrame(rafId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
       }
+
+      dropOverlay.classList.add('hidden');
+      flipBtn.disabled = false;
+      randomAllBtn.disabled = false;
+      recordBtn.disabled = false;
+
+      recomputeGlobalTimeline();
       startAnimation();
     }
 
+    async function loadFilesIntoSlots(fileList, specificSlotIdx = null) {
+      const files = [...fileList].filter((f) => f && f.name.toLowerCase().endsWith('.gpx'));
+      if (!files.length) return;
+
+      for (let i = 0; i < files.length; i++) {
+        let targetIdx = specificSlotIdx !== null && i === 0
+          ? specificSlotIdx
+          : slots.findIndex((s) => s.track === null);
+        if (targetIdx === -1) {
+          slots.push(createSlot(slots.length));
+          targetIdx = slots.length - 1;
+        }
+        try {
+          const text = await files[i].text();
+          slots[targetIdx].track = parseSingleGPX(text, files[i].name);
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+      osmBlockedNotified = false;
+      onTracksChanged();
+    }
+
+    // Wylicza geometrię sekcji ekranu: w pionie 9:16 legenda ma własny górny pas (zero zasłaniania mapy)
     function getMapViewport() {
       const W = canvas.width;
       const H = canvas.height;
-      const elevH = hasElevation ? Math.round(H * 0.20) : 0;
-      return { W, H, mapW: W, mapH: H - elevH, elevH };
+      const unitSize = Math.max(W, H);
+      const activeCount = Math.max(1, getActiveSlots().length);
+      const showElev = inShowElev.checked && globalHasElevation;
+      const showLegend = inShowLegend.checked;
+      const isPortrait = H > W;
+
+      let topHudH = 0;
+      if (showLegend && isPortrait) {
+        const cols = activeCount >= 4 ? 2 : 1;
+        const rows = Math.ceil(activeCount / cols);
+        const headerH = Math.round(unitSize * 0.022);
+        const rowH = Math.round(unitSize * 0.021);
+        topHudH = headerH + rows * rowH + 18;
+      }
+
+      const elevH = showElev ? Math.round(H * 0.20) : 0;
+      const mapY = topHudH;
+      const mapW = W;
+      const mapH = Math.max(100, H - topHudH - elevH);
+
+      return { W, H, unitSize, isPortrait, mapX: 0, mapY, mapW, mapH, topHudH, elevH, showElev, showLegend };
+    }
+
+    function getFloatingHudDimensions(W, unitSize, count) {
+      const compact = count > 5;
+      const pad = W * 0.016;
+      const boxW = Math.min(W * 0.45, unitSize * 0.27);
+      const headerH = unitSize * (compact ? 0.020 : 0.024);
+      const rowH = unitSize * (compact ? 0.0195 : 0.025);
+      const boxH = headerH + count * rowH + 10;
+      return { pad, boxW, boxH, headerH, rowH, compact };
     }
 
     function computeOverviewCamera() {
-      if (!activePts.length) return;
+      const active = getActiveSlots();
+      if (!active.length) return;
+
       let minWx = Infinity, maxWx = -Infinity, minWy = Infinity, maxWy = -Infinity;
-      for (const p of activePts) {
-        if (p.wx < minWx) minWx = p.wx;
-        if (p.wx > maxWx) maxWx = p.wx;
-        if (p.wy < minWy) minWy = p.wy;
-        if (p.wy > maxWy) maxWy = p.wy;
+      for (const s of active) {
+        for (const p of s.track.pts) {
+          if (p.wx < minWx) minWx = p.wx;
+          if (p.wx > maxWx) maxWx = p.wx;
+          if (p.wy < minWy) minWy = p.wy;
+          if (p.wy > maxWy) maxWy = p.wy;
+        }
       }
-      const { mapW, mapH } = getMapViewport();
+
+      const { mapY, mapW, mapH, unitSize, isPortrait, showLegend } = getMapViewport();
       const spanX = Math.max(1e-5, maxWx - minWx);
       const spanY = Math.max(1e-5, maxWy - minWy);
-
-      const zx = Math.log2((mapW * 0.78) / (spanX * 256));
-      const zy = Math.log2((mapH * 0.76) / (spanY * 256));
+      const midWx = (minWx + maxWx) / 2;
+      const midWy = (minWy + maxWy) / 2;
       const maxZ = MAP_PROVIDERS[inMapStyle.value].maxZ;
-      const z = Math.max(2, Math.min(maxZ - 1, Math.min(zx, zy)));
 
-      overviewCam = {
-        wx: (minWx + maxWx) / 2,
-        wy: (minWy + maxWy) / 2,
-        z
+      // Gdy legenda jest ukryta -> maksymalny zoom i wycentrowanie na pełnej mapie
+      if (!showLegend) {
+        const zx = Math.log2((mapW * 0.90) / (spanX * 256));
+        const zy = Math.log2((mapH * 0.88) / (spanY * 256));
+        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
+        overviewCam = { wx: midWx, wy: midWy, z };
+        return;
+      }
+
+      // W pionie 9:16 legenda jest nad mapą (topHudH), więc mapa ma 100% wolnego kadru poniżej
+      if (isPortrait) {
+        const zx = Math.log2((mapW * 0.86) / (spanX * 256));
+        const zy = Math.log2((mapH * 0.84) / (spanY * 256));
+        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
+        overviewCam = { wx: midWx, wy: midWy, z };
+        return;
+      }
+
+      // W 16:9 / 1:1 przy widocznej legendzie w prawym górnym rogu:
+      // wybierz lepszy bezpieczny obszar (poniżej legendy LUB na lewo od legendy), żeby nie zasłaniała tracków
+      const hud = getFloatingHudDimensions(mapW, unitSize, active.length);
+      const mPad = Math.max(24, mapW * 0.03);
+
+      // Obszar A: poniżej legendy (pełna szerokość)
+      const areaA = {
+        x0: mPad, x1: mapW - mPad,
+        y0: mapY + hud.pad + hud.boxH + 18, y1: mapY + mapH - mPad
       };
+      // Obszar B: na lewo od legendy (pełna wysokość)
+      const areaB = {
+        x0: mPad, x1: mapW - hud.pad - hud.boxW - 18,
+        y0: mapY + mPad, y1: mapY + mapH - mPad
+      };
+
+      const fitInArea = (area) => {
+        const aw = Math.max(120, area.x1 - area.x0);
+        const ah = Math.max(120, area.y1 - area.y0);
+        const zx = Math.log2((aw * 0.90) / (spanX * 256));
+        const zy = Math.log2((ah * 0.88) / (spanY * 256));
+        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
+        const pxScale = Math.pow(2, z) * 256;
+        const safeCx = (area.x0 + area.x1) / 2;
+        const safeCy = (area.y0 + area.y1) / 2;
+        const wx = midWx - (safeCx - mapW / 2) / pxScale;
+        const wy = midWy - (safeCy - (mapY + mapH / 2)) / pxScale;
+        return { wx, wy, z };
+      };
+
+      const camA = fitInArea(areaA);
+      const camB = fitInArea(areaB);
+      overviewCam = camA.z >= camB.z ? camA : camB;
     }
 
-    // --- Ładowanie kafelków (OpenStreetMap pozostaje domyślnie wybrany bez samoczynnej zmiany listy) ---
     function requestTile(styleKey, z, tx, ty, isOverlay = false) {
       const maxTile = 1 << z;
       if (ty < 0 || ty >= maxTile) return null;
@@ -912,10 +1315,7 @@
           entry.status = 'ok';
           resolve(entry);
         };
-        img.onerror = () => {
-          entry.status = 'error';
-          resolve(entry);
-        };
+        img.onerror = () => { entry.status = 'error'; resolve(entry); };
         img.src = urlFn(z, wx, ty);
       });
 
@@ -948,7 +1348,8 @@
 
     async function preloadTiles() {
       syncDarkModeVisibility();
-      if (!activePts.length) return [];
+      const active = getActiveSlots();
+      if (!active.length) return [];
       const provider = MAP_PROVIDERS[inMapStyle.value];
 
       if (provider.isVector) {
@@ -981,174 +1382,183 @@
     }
     function lerp(a, b, t) { return a + (b - a) * t; }
 
-    function getPointAtProgress(t) {
-      if (activePts.length < 2) return { wx: 0.5, wy: 0.5, ele: 0, km: 0, angle: 0, idx: 0 };
-      const pTarget = Math.max(0, Math.min(1, t));
-      let lo = 0, hi = activePts.length - 1;
+    function getTrackStateAtSimTime(trk, currentSimMs) {
+      const pts = trk.pts;
+      if (currentSimMs <= trk.simStartMs) {
+        return {
+          status: 'waiting',
+          progress: 0,
+          wx: pts[0].wx,
+          wy: pts[0].wy,
+          ele: pts[0].smoothEle ?? 0,
+          km: 0,
+          idx: 0
+        };
+      }
+      if (currentSimMs >= trk.simEndMs) {
+        const last = pts[pts.length - 1];
+        return {
+          status: 'finished',
+          progress: 1,
+          wx: last.wx,
+          wy: last.wy,
+          ele: last.smoothEle ?? 0,
+          km: trk.totalKm,
+          idx: pts.length - 1
+        };
+      }
+
+      const relTarget = currentSimMs - trk.simStartMs;
+      let lo = 0, hi = pts.length - 1;
       while (lo < hi - 1) {
         const mid = (lo + hi) >> 1;
-        if (activePts[mid].progress <= pTarget) lo = mid;
+        if (pts[mid].relMs <= relTarget) lo = mid;
         else hi = mid;
       }
-      const a = activePts[lo], b = activePts[hi];
-      const span = (b.progress - a.progress) || 1;
-      const f = (pTarget - a.progress) / span;
-      const wx = a.wx + (b.wx - a.wx) * f;
-      const wy = a.wy + (b.wy - a.wy) * f;
-      const ele = (a.smoothEle ?? 0) + ((b.smoothEle ?? 0) - (a.smoothEle ?? 0)) * f;
-      const km = a.km + (b.km - a.km) * f;
-
-      const bIdx = Math.max(0, lo - 3);
-      const fIdx = Math.min(activePts.length - 1, hi + 3);
-      const angle = Math.atan2(activePts[fIdx].wy - activePts[bIdx].wy, activePts[fIdx].wx - activePts[bIdx].wx);
-      return { wx, wy, ele, km, angle, idx: hi };
+      const a = pts[lo], b = pts[hi];
+      const span = (b.relMs - a.relMs) || 1;
+      const f = (relTarget - a.relMs) / span;
+      return {
+        status: 'riding',
+        progress: relTarget / trk.durationMs,
+        wx: a.wx + (b.wx - a.wx) * f,
+        wy: a.wy + (b.wy - a.wy) * f,
+        ele: (a.smoothEle ?? 0) + ((b.smoothEle ?? 0) - (a.smoothEle ?? 0)) * f,
+        km: a.km + (b.km - a.km) * f,
+        idx: hi
+      };
     }
 
     function getCameraAtTime(globalT) {
       const intro = Math.min(1, globalT / 0.15);
       const outro = Math.max(0, (globalT - 0.88) / 0.12);
-      const zBoost = easeInOutCubic(intro) * 0.12 - easeInOutCubic(outro) * 0.12;
+      const zBoost = easeInOutCubic(intro) * 0.06 - easeInOutCubic(outro) * 0.06;
       return { wx: overviewCam.wx, wy: overviewCam.wy, z: overviewCam.z + zBoost };
     }
 
-    function getBikeAlpha(rideT) {
-      if (rideT <= 0.08) return 0.50;
-      if (rideT < 0.18) return lerp(0.50, 1.00, easeInOutCubic((rideT - 0.08) / 0.10));
-      if (rideT <= 0.82) return 1.00;
-      if (rideT < 0.92) return lerp(1.00, 0.50, easeInOutCubic((rideT - 0.82) / 0.10));
+    function getDotAlpha(trackProgress, status) {
+      if (status === 'waiting' || status === 'finished') return 0.50;
+      if (trackProgress <= 0.08) return 0.50;
+      if (trackProgress < 0.18) return lerp(0.50, 1.00, easeInOutCubic((trackProgress - 0.08) / 0.10));
+      if (trackProgress <= 0.82) return 1.00;
+      if (trackProgress < 0.92) return lerp(1.00, 0.50, easeInOutCubic((trackProgress - 0.82) / 0.10));
       return 0.50;
     }
 
-    function drawBikeIconOn(tCtx, cx, cy, size, facingRight = true, bob = 0) {
-      tCtx.save();
-      tCtx.translate(cx, cy + bob);
-      if (!facingRight) tCtx.scale(-1, 1);
+    function drawMovingDot(bx, by, unitSize, colorObj, alpha, pulsePhase) {
+      const r = unitSize * 0.0088;
+      const half = dotLayer.width / 2;
 
-      const s = size / 32;
-      tCtx.scale(s, s);
-      tCtx.lineCap = 'round';
-      tCtx.lineJoin = 'round';
+      dotCtx.clearRect(0, 0, dotLayer.width, dotLayer.height);
+      dotCtx.save();
 
-      tCtx.strokeStyle = '#ffffff';
-      tCtx.lineWidth = 2.6;
-      tCtx.beginPath();
-      tCtx.arc(-9.5, 5.5, 6.2, 0, Math.PI * 2);
-      tCtx.stroke();
-      tCtx.beginPath();
-      tCtx.arc(9.5, 5.5, 6.2, 0, Math.PI * 2);
-      tCtx.stroke();
+      const ringR = r * (1.35 + 0.5 * pulsePhase);
+      dotCtx.beginPath();
+      dotCtx.arc(half, half, ringR, 0, Math.PI * 2);
+      dotCtx.strokeStyle = colorObj.hex;
+      dotCtx.lineWidth = 2;
+      dotCtx.globalAlpha = 0.55 * (1 - pulsePhase);
+      dotCtx.stroke();
+      dotCtx.globalAlpha = 1;
 
-      tCtx.fillStyle = '#fb923c';
-      tCtx.beginPath();
-      tCtx.moveTo(-4.8, -3.5);
-      tCtx.lineTo(4.2, -3.5);
-      tCtx.lineTo(1.5, 1.5);
-      tCtx.lineTo(-3.2, 0.5);
-      tCtx.closePath();
-      tCtx.fill();
+      dotCtx.shadowColor = colorObj.hex;
+      dotCtx.shadowBlur = 12;
+      dotCtx.fillStyle = colorObj.hex;
+      dotCtx.beginPath();
+      dotCtx.arc(half, half, r, 0, Math.PI * 2);
+      dotCtx.fill();
 
-      tCtx.strokeStyle = '#ffffff';
-      tCtx.lineWidth = 2.3;
-      tCtx.beginPath();
-      tCtx.moveTo(-9.5, 5.5);
-      tCtx.lineTo(-1.2, 5.5);
-      tCtx.lineTo(5.6, -4.2);
-      tCtx.lineTo(-5.0, -4.2);
-      tCtx.closePath();
-      tCtx.moveTo(-1.2, 5.5);
-      tCtx.lineTo(-5.6, -6.8);
-      tCtx.moveTo(9.5, 5.5);
-      tCtx.lineTo(5.2, -6.2);
-      tCtx.stroke();
-
-      tCtx.lineWidth = 2.6;
-      tCtx.beginPath();
-      tCtx.moveTo(-7.6, -7.2);
-      tCtx.lineTo(-3.8, -7.2);
-      tCtx.stroke();
-
-      tCtx.lineWidth = 2.2;
-      tCtx.beginPath();
-      tCtx.moveTo(5.2, -6.2);
-      tCtx.lineTo(7.4, -6.4);
-      tCtx.arc(7.4, -4.1, 2.3, -Math.PI / 2, Math.PI / 2, false);
-      tCtx.lineTo(6.2, -1.8);
-      tCtx.stroke();
-
-      tCtx.restore();
-    }
-
-    function drawMovingBike(bx, by, unitSize, palette, facingRight, bob, alpha) {
-      const r = unitSize * 0.0155;
-      const half = bikeLayer.width / 2;
-
-      bikeCtx.clearRect(0, 0, bikeLayer.width, bikeLayer.height);
-      bikeCtx.save();
-      bikeCtx.fillStyle = palette.hex;
-      bikeCtx.strokeStyle = '#ffffff';
-      bikeCtx.lineWidth = 2.5;
-      bikeCtx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-      bikeCtx.shadowBlur = 10;
-      bikeCtx.beginPath();
-      bikeCtx.arc(half, half, r, 0, Math.PI * 2);
-      bikeCtx.fill();
-      bikeCtx.shadowBlur = 0;
-      bikeCtx.stroke();
-      drawBikeIconOn(bikeCtx, half, half, r * 1.4, facingRight, bob);
-      bikeCtx.restore();
+      dotCtx.shadowBlur = 0;
+      dotCtx.lineWidth = 2.4;
+      dotCtx.strokeStyle = '#ffffff';
+      dotCtx.stroke();
+      dotCtx.restore();
 
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.drawImage(bikeLayer, bx - half, by - half);
+      ctx.drawImage(dotLayer, bx - half, by - half);
       ctx.restore();
     }
 
-    function drawPin(x, y, unitSize, pulsePhase, label, bgColor, borderColor, palette) {
-      const r = unitSize * 0.013;
-      const ringR = r * (1.2 + 0.55 * pulsePhase);
+    function drawDotLabel(bx, by, unitSize, mapY, mapW, mapH, colorObj, name) {
+      const text = (name || '').trim();
+      if (!text) return;
+
+      const r = unitSize * 0.0088;
+      const fontSize = Math.max(11, Math.round(unitSize * 0.0082));
 
       ctx.save();
+      ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+
+      let shown = text;
+      const maxW = unitSize * 0.14;
+      while (ctx.measureText(shown).width > maxW && shown.length > 3) {
+        shown = shown.slice(0, -2) + '…';
+      }
+
+      const padX = 7;
+      const pillH = fontSize + 8;
+      const pillW = ctx.measureText(shown).width + padX * 2;
+
+      let lx = bx - pillW / 2;
+      lx = Math.max(6, Math.min(mapW - pillW - 6, lx));
+
+      let ly = by - r - pillH - 6;
+      if (ly < mapY + 6) ly = Math.min(mapY + mapH - pillH - 6, by + r + 6);
+
+      ctx.fillStyle = 'rgba(11, 19, 17, 0.86)';
+      ctx.strokeStyle = colorObj.hex;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.arc(x, y, ringR, 0, Math.PI * 2);
-      ctx.strokeStyle = `${palette.hex}99`;
-      ctx.lineWidth = 2.5;
+      ctx.roundRect(lx, ly, pillW, pillH, 6);
+      ctx.fill();
       ctx.stroke();
 
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(shown, lx + pillW / 2, ly + pillH / 2 + 0.5);
+      ctx.restore();
+    }
+
+    function drawPin(x, y, unitSize, colorHex, label) {
+      const r = unitSize * 0.0068;
+      ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.45)';
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = bgColor;
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = colorHex;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
-
       ctx.shadowBlur = 0;
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = '#ffffff';
       ctx.stroke();
-
       if (label) {
         ctx.fillStyle = '#ffffff';
-        ctx.font = `800 ${Math.round(r * 0.9)}px Inter, system-ui, sans-serif`;
+        ctx.font = `800 ${Math.round(r * 1.1)}px Inter, system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(label, x, y + 1);
+        ctx.fillText(label, x, y + 0.5);
       }
       ctx.restore();
     }
 
     function renderFrame(elapsedMs) {
-      const { W, H, mapW, mapH, elevH } = getMapViewport();
-      const unitSize = Math.max(W, H);
-      const palette = PALETTES[inColor.value] || PALETTES.orange;
-      const dur = parseInt(inDuration.value, 10) || 9000;
+      const vp = getMapViewport();
+      const { W, H, unitSize, isPortrait, mapY, mapW, mapH, topHudH, elevH, showElev, showLegend } = vp;
+      const active = getActiveSlots();
+      const dur = getDurationMs();
       const globalT = Math.min(1, elapsedMs / dur);
-      const rideT = Math.max(0, Math.min(1, (globalT - 0.10) / 0.80));
+      const rideT = Math.max(0, Math.min(1, (globalT - 0.08) / 0.84));
+      const currentSimMs = globalStartMs + rideT * globalSpanMs;
+      const pulsePhase = (elapsedMs % 1400) / 1400;
 
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = '#182028';
       ctx.fillRect(0, 0, W, H);
 
-      if (!activePts.length) return;
+      if (!active.length) return;
 
       const cam = getCameraAtTime(globalT);
       const styleKey = inMapStyle.value;
@@ -1157,12 +1567,13 @@
 
       const worldToScreen = (wx, wy) => ({
         x: mapW / 2 + (wx - cam.wx) * pxScale,
-        y: mapH / 2 + (wy - cam.wy) * pxScale
+        y: mapY + mapH / 2 + (wy - cam.wy) * pxScale
       });
 
+      // 1. Podkład mapy w obszarze [0, mapY, mapW, mapH]
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, 0, mapW, mapH);
+      ctx.rect(0, mapY, mapW, mapH);
       ctx.clip();
 
       if (provider.isVector) {
@@ -1170,7 +1581,7 @@
         if (m) {
           const [lon, lat] = worldToLonLat(cam.wx, cam.wy);
           m.jumpTo({ center: [lon, lat], zoom: Math.max(1, cam.z - 1), animate: false });
-          ctx.drawImage(m.getCanvas(), 0, 0, mapW, mapH);
+          ctx.drawImage(m.getCanvas(), 0, mapY, mapW, mapH);
         }
       } else {
         const tileZ = Math.max(2, Math.min(provider.maxZ, Math.round(cam.z)));
@@ -1181,7 +1592,7 @@
         for (const t of tiles) {
           const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
           const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
-          const sy = mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
+          const sy = mapY + mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
           if (entry && entry.status === 'ok' && entry.img) {
             ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
             if (provider.overlayUrl) {
@@ -1203,89 +1614,77 @@
         }
       }
 
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = `${palette.hex}44`;
-      ctx.lineWidth = unitSize * 0.0052;
-      ctx.beginPath();
-      activePts.forEach((p, i) => {
-        const sp = worldToScreen(p.wx, p.wy);
-        if (i === 0) ctx.moveTo(sp.x, sp.y);
-        else ctx.lineTo(sp.x, sp.y);
-      });
-      ctx.stroke();
-      ctx.restore();
+      const states = active.map((slot) => ({
+        slot,
+        st: getTrackStateAtSimTime(slot.track, currentSimMs)
+      }));
 
-      const cur = getPointAtProgress(rideT);
-      if (rideT > 0) {
-        ctx.save();
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.shadowColor = palette.hex;
-        ctx.shadowBlur = 12;
-        ctx.strokeStyle = palette.hex;
-        ctx.lineWidth = unitSize * 0.0038;
-        ctx.beginPath();
-        const p0 = worldToScreen(activePts[0].wx, activePts[0].wy);
-        ctx.moveTo(p0.x, p0.y);
-        for (let i = 1; i < cur.idx; i++) {
-          const sp = worldToScreen(activePts[i].wx, activePts[i].wy);
-          ctx.lineTo(sp.x, sp.y);
+      // 2. Efekt rysowania śladu dopiero po przejechaniu kropki
+      for (const { slot, st } of states) {
+        const trk = slot.track;
+        const col = slot.color;
+
+        if (st.progress > 0) {
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.shadowColor = col.hex;
+          ctx.shadowBlur = 10;
+          ctx.strokeStyle = col.hex;
+          ctx.lineWidth = unitSize * 0.0036;
+          ctx.beginPath();
+          const p0 = worldToScreen(trk.pts[0].wx, trk.pts[0].wy);
+          ctx.moveTo(p0.x, p0.y);
+          for (let i = 1; i < st.idx; i++) {
+            const sp = worldToScreen(trk.pts[i].wx, trk.pts[i].wy);
+            ctx.lineTo(sp.x, sp.y);
+          }
+          const curSp = worldToScreen(st.wx, st.wy);
+          ctx.lineTo(curSp.x, curSp.y);
+          ctx.stroke();
+
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = col.core;
+          ctx.lineWidth = unitSize * 0.0012;
+          ctx.stroke();
+          ctx.restore();
         }
-        const curSp = worldToScreen(cur.wx, cur.wy);
-        ctx.lineTo(curSp.x, curSp.y);
-        ctx.stroke();
 
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = palette.core;
-        ctx.lineWidth = unitSize * 0.0014;
-        ctx.stroke();
-        ctx.restore();
+        const startSp = worldToScreen(trk.pts[0].wx, trk.pts[0].wy);
+        drawPin(startSp.x, startSp.y, unitSize, col.hex, null);
+
+        if (!trk.isLoop && st.status === 'finished') {
+          const endSp = worldToScreen(trk.pts[trk.pts.length - 1].wx, trk.pts[trk.pts.length - 1].wy);
+          drawPin(endSp.x, endSp.y, unitSize, col.hex, 'M');
+        }
       }
 
-      for (const poi of activePOIs) {
-        const sp = worldToScreen(poi.wx, poi.wy);
-        ctx.save();
-        ctx.fillStyle = '#0284c7';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, unitSize * 0.0065, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
+      // 3. Kropki ponad liniami + etykiety tekstowe
+      for (const { slot, st } of states) {
+        const dotSp = worldToScreen(st.wx, st.wy);
+        const alpha = getDotAlpha(st.progress, st.status);
+        drawMovingDot(dotSp.x, dotSp.y, unitSize, slot.color, alpha, pulsePhase);
+      }
+      for (const { slot, st } of states) {
+        const dotSp = worldToScreen(st.wx, st.wy);
+        drawDotLabel(dotSp.x, dotSp.y, unitSize, mapY, mapW, mapH, slot.color, slot.track.name);
       }
 
-      const pulse = (elapsedMs % 1500) / 1500;
-      const startSp = worldToScreen(activePts[0].wx, activePts[0].wy);
-      const endSp = worldToScreen(activePts[activePts.length - 1].wx, activePts[activePts.length - 1].wy);
-
-      if (!isLoopRoute) {
-        drawPin(startSp.x, startSp.y, unitSize, pulse, 'A', '#15803d', '#4ade80', palette);
-        drawPin(endSp.x, endSp.y, unitSize, pulse, 'B', '#991b1b', '#f87171', palette);
-      } else {
-        drawPin(startSp.x, startSp.y, unitSize, pulse, null, '#991b1b', '#f87171', palette);
-      }
-
-      const bikeSp = worldToScreen(cur.wx, cur.wy);
-      const facingRight = Math.cos(cur.angle) >= 0;
-      const bob = (rideT > 0 && rideT < 1) ? Math.sin(elapsedMs * 0.025) * 1.4 : 0;
-      drawMovingBike(bikeSp.x, bikeSp.y, unitSize, palette, facingRight, bob, getBikeAlpha(rideT));
-
+      // Atrybucja mapy
       ctx.save();
       ctx.font = `600 ${Math.round(unitSize * 0.0075)}px Inter, system-ui, sans-serif`;
       const attrW = ctx.measureText(provider.attr).width + 14;
       ctx.fillStyle = styleKey === 'dark_mode' ? 'rgba(15,23,34,0.78)' : 'rgba(255,255,255,0.78)';
-      ctx.fillRect(mapW - attrW, mapH - 20, attrW, 20);
+      ctx.fillRect(mapW - attrW, mapY + mapH - 20, attrW, 20);
       ctx.fillStyle = styleKey === 'dark_mode' ? '#cbd5e1' : '#111827';
-      ctx.fillText(provider.attr, mapW - attrW + 7, mapH - 6);
+      ctx.fillText(provider.attr, mapW - attrW + 7, mapY + mapH - 6);
       ctx.restore();
 
       ctx.restore();
 
-      if (hasElevation && elevH > 0) {
-        const py0 = mapH;
+      // 4. Wspólny wykres wysokości wszystkich tracków
+      if (showElev && elevH > 0) {
+        const py0 = mapY + mapH;
         ctx.save();
         ctx.fillStyle = '#0d1714';
         ctx.fillRect(0, py0, W, elevH);
@@ -1298,19 +1697,19 @@
 
         const padL = W * 0.055;
         const padR = W * 0.025;
-        const padT = elevH * 0.16;
+        const padT = elevH * 0.14;
         const padB = elevH * 0.18;
         const plotW = W - padL - padR;
         const plotH = elevH - padT - padB;
         const plotY0 = py0 + padT;
         const plotY1 = py0 + padT + plotH;
 
-        const step = Math.max(10, Math.ceil((maxEle - minEle) / 4 / 25) * 25);
-        const yMinTick = Math.max(0, Math.floor(minEle / step) * step);
-        const yMaxTick = Math.max(yMinTick + step, Math.ceil(maxEle / step) * step);
+        const step = Math.max(10, Math.ceil((globalMaxEle - globalMinEle) / 4 / 25) * 25);
+        const yMinTick = Math.max(0, Math.floor(globalMinEle / step) * step);
+        const yMaxTick = Math.max(yMinTick + step, Math.ceil(globalMaxEle / step) * step);
 
         const eleToY = (e) => plotY1 - ((e - yMinTick) / (yMaxTick - yMinTick)) * plotH;
-        const progToX = (p) => padL + p * plotW;
+        const kmToX = (km) => padL + (km / globalMaxKm) * plotW;
 
         ctx.font = `600 ${Math.round(unitSize * 0.0072)}px Inter, system-ui, sans-serif`;
         ctx.textAlign = 'right';
@@ -1326,34 +1725,21 @@
           ctx.fillText(`${v}m`, padL - 8, gy);
         }
 
-        ctx.beginPath();
-        ctx.moveTo(progToX(0), plotY1);
-        activePts.forEach((p) => ctx.lineTo(progToX(p.progress), eleToY(p.smoothEle)));
-        ctx.lineTo(progToX(1), plotY1);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.07)';
-        ctx.fill();
+        for (const { slot, st } of states) {
+          const trk = slot.track;
+          if (!trk.hasEle || st.progress <= 0) continue;
+          const col = slot.color;
+          const curX = kmToX(st.km);
+          const curY = eleToY(st.ele);
 
-        ctx.beginPath();
-        activePts.forEach((p, i) => {
-          const x = progToX(p.progress), y = eleToY(p.smoothEle);
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        });
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-        ctx.lineWidth = 1.6;
-        ctx.stroke();
-
-        const curX = progToX(rideT);
-        const curY = eleToY(cur.ele);
-        if (rideT > 0) {
           const grad = ctx.createLinearGradient(0, plotY0, 0, plotY1);
-          grad.addColorStop(0, `${palette.hex}75`);
-          grad.addColorStop(1, `${palette.hex}12`);
+          grad.addColorStop(0, `${col.hex}42`);
+          grad.addColorStop(1, `${col.hex}08`);
 
           ctx.beginPath();
-          ctx.moveTo(progToX(0), plotY1);
-          for (let i = 0; i < cur.idx; i++) {
-            ctx.lineTo(progToX(activePts[i].progress), eleToY(activePts[i].smoothEle));
+          ctx.moveTo(kmToX(0), plotY1);
+          for (let i = 0; i < st.idx; i++) {
+            ctx.lineTo(kmToX(trk.pts[i].km), eleToY(trk.pts[i].smoothEle));
           }
           ctx.lineTo(curX, curY);
           ctx.lineTo(curX, plotY1);
@@ -1362,130 +1748,179 @@
           ctx.fill();
 
           ctx.beginPath();
-          ctx.moveTo(progToX(0), eleToY(activePts[0].smoothEle));
-          for (let i = 1; i < cur.idx; i++) {
-            ctx.lineTo(progToX(activePts[i].progress), eleToY(activePts[i].smoothEle));
+          ctx.moveTo(kmToX(0), eleToY(trk.pts[0].smoothEle));
+          for (let i = 1; i < st.idx; i++) {
+            ctx.lineTo(kmToX(trk.pts[i].km), eleToY(trk.pts[i].smoothEle));
           }
           ctx.lineTo(curX, curY);
-          ctx.strokeStyle = palette.hex;
-          ctx.lineWidth = 3;
+          ctx.strokeStyle = col.hex;
+          ctx.lineWidth = 2.6;
           ctx.stroke();
-        }
 
-        for (const poi of activePOIs) {
-          const px = progToX(poi.progress);
-          const py = eleToY(poi.ele);
-          ctx.fillStyle = '#0284c7';
+          ctx.fillStyle = col.hex;
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.8;
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+          ctx.arc(curX, curY, 4.8, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
         }
 
-        ctx.strokeStyle = palette.hex;
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(curX, plotY0);
-        ctx.lineTo(curX, plotY1);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.strokeStyle = palette.hex;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(curX, curY, 5.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
         ctx.fillStyle = '#94a8a0';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const shownKmTotal = parseFloat(inKm.value) || totalKm;
         for (let k = 0; k <= 4; k++) {
           const frac = k / 4;
-          ctx.fillText(`${(frac * shownKmTotal).toFixed(shownKmTotal >= 20 ? 0 : 1)} km`, progToX(frac), plotY1 + 6);
+          const kmVal = frac * globalMaxKm;
+          ctx.fillText(`${kmVal.toFixed(globalMaxKm >= 20 ? 0 : 1)} km`, kmToX(kmVal), plotY1 + 6);
         }
 
         ctx.restore();
       }
 
-      drawHUD(W, H, unitSize, rideT, globalT, cur.ele, palette);
+      // 5. Legenda (tylko gdy włączona)
+      if (showLegend) {
+        if (isPortrait) {
+          drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states);
+        } else {
+          drawMultiHUD(W, unitSize, globalT, currentSimMs, states);
+        }
+      }
     }
 
-    function drawHUD(W, H, unitSize, rideT, globalT, curEle, palette) {
-      const shownTotalKm = parseFloat(inKm.value) || totalKm;
-      const shownTotalGain = parseFloat(inGain.value) || totalGain;
-      const title = (inTitle.value || 'TRASA').toUpperCase();
+    // Dedykowany górny pas legendy w formacie 9:16 (nigdy nie zasłania mapy ani tracków)
+    function drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states) {
+      const cols = states.length >= 4 ? 2 : 1;
+      const headerH = Math.round(unitSize * 0.022);
+      const rowH = Math.round(unitSize * 0.021);
+      const colW = (W - 36) / cols;
 
-      const km = rideT * shownTotalKm;
-      const gain = Math.round(rideT * shownTotalGain);
-      const elev = Math.round(curEle);
+      ctx.save();
+      ctx.fillStyle = '#0d1714';
+      ctx.fillRect(0, 0, W, topHudH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, topHudH);
+      ctx.lineTo(W, topHudH);
+      ctx.stroke();
 
-      const pad = W * 0.018;
-      const boxW = Math.min(W * 0.44, unitSize * 0.24);
-      const boxH = unitSize * 0.085;
+      let clockTxt = '';
+      if (useClockLabels === 'epoch') clockTxt = `Godzina: ${formatClockHHMM(currentSimMs)}`;
+      else if (useClockLabels === 'timeOfDay') clockTxt = `Godzina: ${formatMsOfDayHHMM(currentSimMs)}`;
+      else clockTxt = `Czas: ${formatClockHHMM(currentSimMs - globalStartMs, true)}`;
+
+      ctx.fillStyle = '#94a8a0';
+      ctx.font = `700 ${Math.round(unitSize * 0.0085)}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(clockTxt, 18, headerH * 0.65);
+
+      const fontSize = Math.round(unitSize * 0.0082);
+      states.forEach(({ slot, st }, idx) => {
+        const colIdx = idx % cols;
+        const rowIdx = Math.floor(idx / cols);
+        const rx = 18 + colIdx * colW;
+        const ry = headerH + rowIdx * rowH + rowH * 0.55;
+        const trk = slot.track;
+
+        ctx.fillStyle = slot.color.hex;
+        ctx.beginPath();
+        ctx.arc(rx + 6, ry, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        const eleTxt = trk.hasEle ? ` • ${Math.round(st.ele)}m` : '';
+        const statusTag = st.status === 'finished' ? ' ✓' : '';
+        const rightStr = `${st.km.toFixed(1)}/${trk.totalKm.toFixed(1)} km${eleTxt}${statusTag}`;
+
+        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+        const rightW = ctx.measureText(rightStr).width;
+        const maxNameW = colW - rightW - 34;
+
+        let nm = (trk.name || `Track #${idx + 1}`).trim();
+        while (ctx.measureText(nm).width > maxNameW && nm.length > 3) {
+          nm = nm.slice(0, -2) + '…';
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText(nm, rx + 18, ry);
+
+        ctx.fillStyle = st.status === 'finished' ? '#4ade80' : '#cbd5e1';
+        ctx.textAlign = 'right';
+        ctx.fillText(rightStr, rx + colW - 10, ry);
+      });
+
+      ctx.restore();
+    }
+
+    function drawMultiHUD(W, unitSize, globalT, currentSimMs, states) {
+      const { pad, boxW, boxH, headerH, rowH, compact } = getFloatingHudDimensions(W, unitSize, states.length);
       const bx = W - boxW - pad;
       const by = pad;
 
-      const alpha = Math.min(1, globalT / 0.10);
+      const alpha = Math.min(1, globalT / 0.08);
       ctx.save();
       ctx.globalAlpha = alpha;
 
       ctx.fillStyle = 'rgba(13, 25, 21, 0.88)';
-      ctx.strokeStyle = palette.hex;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.roundRect(bx, by, boxW, boxH, 14);
+      ctx.roundRect(bx, by, boxW, boxH, 13);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = palette.core;
-      ctx.font = `700 ${Math.round(unitSize * 0.0085)}px Inter, system-ui, sans-serif`;
-      let shownTitle = title;
-      while (ctx.measureText(shownTitle).width > boxW - 30 && shownTitle.length > 4) {
-        shownTitle = shownTitle.slice(0, -2) + '…';
-      }
-      ctx.fillText(shownTitle, bx + 15, by + boxH * 0.25);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = `800 ${Math.round(unitSize * 0.017)}px Inter, system-ui, sans-serif`;
-      const kmStr = `${km.toFixed(1)} km`;
-      ctx.fillText(kmStr, bx + 15, by + boxH * 0.57);
-      const kmW = ctx.measureText(kmStr).width;
+      let clockTxt = '';
+      if (useClockLabels === 'epoch') clockTxt = `Godzina: ${formatClockHHMM(currentSimMs)}`;
+      else if (useClockLabels === 'timeOfDay') clockTxt = `Godzina: ${formatMsOfDayHHMM(currentSimMs)}`;
+      else clockTxt = `Czas: ${formatClockHHMM(currentSimMs - globalStartMs, true)}`;
 
       ctx.fillStyle = '#94a8a0';
-      ctx.font = `600 ${Math.round(unitSize * 0.0095)}px Inter, system-ui, sans-serif`;
-      ctx.fillText(`/ ${shownTotalKm.toFixed(1)} km`, bx + 21 + kmW, by + boxH * 0.57);
+      ctx.font = `700 ${Math.round(unitSize * (compact ? 0.0078 : 0.0085))}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(clockTxt, bx + 13, by + headerH * 0.62);
 
-      ctx.fillStyle = '#d1fae5';
-      ctx.font = `600 ${Math.round(unitSize * 0.0095)}px Inter, system-ui, sans-serif`;
-      const eleTxt = hasElevation ? `  •  ${elev} m n.p.m.` : '';
-      ctx.fillText(`↑ ${gain} m${eleTxt}`, bx + 15, by + boxH * 0.83);
+      const fontSize = Math.round(unitSize * (compact ? 0.0078 : 0.009));
+      states.forEach(({ slot, st }, idx) => {
+        const ry = by + headerH + idx * rowH + rowH * 0.5;
+        const trk = slot.track;
 
-      const barX = bx + 15;
-      const barY = by + boxH - 7;
-      const barW = boxW - 30;
-      ctx.fillStyle = 'rgba(255,255,255,0.12)';
-      ctx.fillRect(barX, barY, barW, 4);
-      ctx.fillStyle = palette.hex;
-      ctx.fillRect(barX, barY, barW * rideT, 4);
+        ctx.fillStyle = slot.color.hex;
+        ctx.beginPath();
+        ctx.arc(bx + 17, ry, compact ? 4 : 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+        const maxNameW = boxW * 0.43;
+        let nm = (trk.name || `Track #${idx + 1}`).trim();
+        while (ctx.measureText(nm).width > maxNameW && nm.length > 3) {
+          nm = nm.slice(0, -2) + '…';
+        }
+        ctx.textAlign = 'left';
+        ctx.fillText(nm, bx + 28, ry);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = st.status === 'finished' ? '#4ade80' : '#e2e8f0';
+        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+        const eleTxt = trk.hasEle ? ` • ${Math.round(st.ele)}m` : '';
+        const statusTag = st.status === 'waiting' ? ' (czeka)' : (st.status === 'finished' ? ' ✓' : '');
+        ctx.fillText(`${st.km.toFixed(1)}/${trk.totalKm.toFixed(1)} km${eleTxt}${statusTag}`, bx + boxW - 13, ry);
+      });
 
       ctx.restore();
     }
 
     function updateStatusLine() {
-      const modeName = isLoopRoute ? 'Pętla' : 'A do B';
-      const poiTxt = activePOIs.length ? ` • ${activePOIs.length} POI` : '';
-      statusText.textContent = `Wczytano GPX: ${totalKm.toFixed(1)} km • ↑ ${Math.round(totalGain)} m • ${modeName}${poiTxt} — kliknij „2. Generuj video”.`;
+      const active = getActiveSlots();
+      statusText.textContent = `Załadowano ${active.length} tras • Najdłuższa: ${globalMaxKm.toFixed(1)} km — kliknij „2. Generuj video”.`;
     }
 
     function loop(ts) {
       if (!startTime) startTime = ts;
-      const dur = parseInt(inDuration.value, 10) || 9000;
+      const dur = getDurationMs();
       const elapsed = isRecording
         ? Math.min(dur, ts - startTime)
         : (ts - startTime) % (dur + 1200);
@@ -1499,38 +1934,64 @@
       rafId = requestAnimationFrame(loop);
     }
 
-    function loadGpxFile(file) {
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          osmBlockedNotified = false;
-          parseGPX(e.target.result, file.name);
-          dropOverlay.classList.add('hidden');
-          flipBtn.disabled = false;
-          recordBtn.disabled = false;
-        } catch (err) {
-          alert(err.message || 'Nie udało się odczytać pliku GPX.');
-        }
-      };
-      reader.readAsText(file);
-    }
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) loadFilesIntoSlots(e.target.files, null);
+      fileInput.value = '';
+    });
 
-    fileInput.addEventListener('change', (e) => loadGpxFile(e.target.files[0]));
+    slotFileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) loadFilesIntoSlots([e.target.files[0]], pendingSlotIndex);
+    });
+
     dropOverlay.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('dragover', (e) => e.preventDefault());
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
-      loadGpxFile(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files.length) loadFilesIntoSlots(e.dataTransfer.files, null);
     });
 
-    flipBtn.addEventListener('click', () => reverseRouteOrder());
+    flipBtn.addEventListener('click', () => {
+      slots.forEach((s, i) => { if (s.track) reverseTrack(i); });
+    });
+
+    randomAllBtn.addEventListener('click', () => {
+      const shuffled = [...BASIC_COLORS].sort(() => Math.random() - 0.5);
+      slots.forEach((s, i) => { s.color = shuffled[i % shuffled.length]; });
+      renderSlotsUI();
+    });
+
+    inTimeSync.addEventListener('change', () => {
+      if (getActiveSlots().length) {
+        recomputeGlobalTimeline();
+        startAnimation();
+      }
+    });
+
+    inShowElev.addEventListener('change', () => {
+      if (getActiveSlots().length) {
+        computeOverviewCamera();
+        preloadTiles();
+        startAnimation();
+      } else {
+        syncDarkModeVisibility();
+      }
+    });
+
+    inShowLegend.addEventListener('change', () => {
+      if (getActiveSlots().length) {
+        computeOverviewCamera();
+        preloadTiles();
+        startAnimation();
+      } else {
+        syncDarkModeVisibility();
+      }
+    });
 
     inAspect.addEventListener('change', () => {
       const [w, h] = inAspect.value.split('x').map(Number);
       canvas.width = w;
       canvas.height = h;
-      if (activePts.length) {
+      if (getActiveSlots().length) {
         computeOverviewCamera();
         preloadTiles();
         startAnimation();
@@ -1539,7 +2000,7 @@
 
     inMapStyle.addEventListener('change', () => {
       osmBlockedNotified = false;
-      if (activePts.length) {
+      if (getActiveSlots().length) {
         computeOverviewCamera();
         preloadTiles();
         updateStatusLine();
@@ -1549,11 +2010,13 @@
     });
 
     inDuration.addEventListener('change', () => {
-      if (activePts.length) startAnimation();
+      const v = parseFloat(inDuration.value);
+      if (isNaN(v) || v < 1) inDuration.value = 1;
+      if (getActiveSlots().length) startAnimation();
     });
 
     recordBtn.addEventListener('click', async () => {
-      if (!activePts.length || isRecording) return;
+      if (!getActiveSlots().length || isRecording) return;
 
       isRecording = true;
       recordBtn.disabled = true;
@@ -1565,7 +2028,7 @@
         new Promise((res) => setTimeout(res, 3500))
       ]);
 
-      const dur = parseInt(inDuration.value, 10) || 9000;
+      const dur = getDurationMs();
       const mimeCandidates = [
         'video/mp4;codecs=avc1',
         'video/mp4',
@@ -1586,9 +2049,8 @@
         const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        const safeName = (inTitle.value || 'animacja-trasy').toLowerCase().replace(/[^a-z0-9]+/gi, '-');
         a.href = url;
-        a.download = `${safeName}.${ext}`;
+        a.download = `generator-tras-gpx-animacja.${ext}`;
         a.click();
         URL.revokeObjectURL(url);
 
@@ -1613,6 +2075,8 @@
         if (recorder.state === 'recording') recorder.stop();
       }, dur + 500);
     });
+
+    renderSlotsUI();
   </script>
 </body>
 </html>
