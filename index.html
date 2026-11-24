@@ -188,7 +188,7 @@
         <label class="field">Mapa:
           <select id="inMapStyle">
             <option value="osm" selected>OpenStreetMap</option>
-            <option value="osm_de">OpenStreetMap (DE)</option>
+            <option value="topo_relief">Topo 3D (Relief)</option>
             <option value="cyclosm">CyclOSM (Rowerowa)</option>
             <option value="opentopo">OpenTopoMap</option>
             <option value="esri_topo">Topo (ArcGIS)</option>
@@ -275,11 +275,12 @@
         maxZ: 18,
         url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
       },
-      osm_de: {
-        name: 'OpenStreetMap (DE)',
-        attr: '© OpenStreetMap contributors',
-        maxZ: 18,
-        url: (z, x, y) => `https://a.tile.openstreetmap.de/${z}/${x}/${y}.png`
+      topo_relief: {
+        name: 'Topo 3D (Relief)',
+        attr: '© OpenTopoMap • Esri World Hillshade',
+        maxZ: 17,
+        url: (z, x, y) => `https://a.tile.opentopomap.org/${z}/${x}/${y}.png`,
+        overlayUrl: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/${z}/${y}/${x}`
       },
       cyclosm: {
         name: 'CyclOSM',
@@ -346,7 +347,6 @@
     tileCheckCanvas.height = 256;
     const tileCheckCtx = tileCheckCanvas.getContext('2d', { willReadFrequently: true });
 
-    // Wykrywa podmieniony przez serwer OSM obrazek "403 Access blocked" (żółto-czarny pas ostrzegawczy po lewej)
     function isOsmBlockedTile(img) {
       try {
         tileCheckCtx.clearRect(0, 0, 256, 256);
@@ -635,34 +635,37 @@
       };
     }
 
-    // --- Ładowanie kafelków mapy (GitHub Pages -> OpenStreetMap; bez Referer -> automatyczny fallback na OSM DE) ---
+    // --- Ładowanie kafelków mapy (z obsługą warstwy nakładki cieniowania 3D dla Topo 3D) ---
     function triggerMapFallback(reason) {
       if (fallbackTriggered) return;
       fallbackTriggered = true;
-      inMapStyle.value = 'osm_de';
+      inMapStyle.value = 'esri_topo';
       statusText.textContent = reason;
       preloadTiles();
     }
 
-    function requestTile(styleKey, z, tx, ty) {
+    function requestTile(styleKey, z, tx, ty, isOverlay = false) {
       const maxTile = 1 << z;
       if (ty < 0 || ty >= maxTile) return null;
       const wx = ((tx % maxTile) + maxTile) % maxTile;
-      const key = `${styleKey}/${z}/${wx}/${ty}`;
+      const key = `${styleKey}${isOverlay ? '_ov' : ''}/${z}/${wx}/${ty}`;
 
       const existing = tileCache.get(key);
       if (existing) return existing;
 
       const provider = MAP_PROVIDERS[styleKey];
+      const urlFn = isOverlay ? provider.overlayUrl : provider.url;
+      if (!urlFn) return null;
+
       const entry = { img: null, status: 'loading', promise: null };
       entry.promise = new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.referrerPolicy = 'strict-origin-when-cross-origin';
         img.onload = () => {
-          if (styleKey === 'osm' && isOsmBlockedTile(img)) {
+          if (!isOverlay && styleKey === 'osm' && isOsmBlockedTile(img)) {
             entry.status = 'error';
-            triggerMapFallback('Brak nagłówka Referer (np. podgląd lokalny) — przełączono na OpenStreetMap (DE).');
+            triggerMapFallback('Brak nagłówka Referer (np. podgląd lokalny) — przełączono na Topo (ArcGIS).');
             resolve(entry);
             return;
           }
@@ -672,16 +675,15 @@
         };
         img.onerror = () => {
           entry.status = 'error';
-          failedTileCount++;
-          if (!fallbackTriggered && styleKey === 'osm' && failedTileCount >= 2) {
-            triggerMapFallback('Serwer OSM odrzucił żądanie — przełączono automatycznie na OpenStreetMap (DE).');
-          } else if (styleKey === 'osm_de' && failedTileCount >= 3) {
-            inMapStyle.value = 'esri_topo';
-            preloadTiles();
+          if (!isOverlay) {
+            failedTileCount++;
+            if (!fallbackTriggered && styleKey === 'osm' && failedTileCount >= 2) {
+              triggerMapFallback('Serwer OSM odrzucił żądanie — przełączono automatycznie na Topo (ArcGIS).');
+            }
           }
           resolve(entry);
         };
-        img.src = provider.url(z, wx, ty);
+        img.src = urlFn(z, wx, ty);
       });
 
       tileCache.set(key, entry);
@@ -715,10 +717,15 @@
       if (!activePts.length) return [];
       const { mapW, mapH } = getMapViewport();
       const promises = [];
+      const provider = MAP_PROVIDERS[inMapStyle.value];
 
       for (const t of getVisibleTilesForCamera(overviewCam, mapW, mapH)) {
-        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty);
+        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
         if (entry && entry.status === 'loading') promises.push(entry.promise);
+        if (provider.overlayUrl) {
+          const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
+          if (ov && ov.status === 'loading') promises.push(ov.promise);
+        }
       }
       return Promise.all(promises);
     }
@@ -917,11 +924,21 @@
 
       const tiles = getVisibleTilesForCamera(cam, mapW, mapH);
       for (const t of tiles) {
-        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty);
+        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
         const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
         const sy = mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
         if (entry && entry.status === 'ok' && entry.img) {
           ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+          if (provider.overlayUrl) {
+            const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
+            if (ov && ov.status === 'ok' && ov.img) {
+              ctx.save();
+              ctx.globalCompositeOperation = 'multiply';
+              ctx.globalAlpha = 0.72;
+              ctx.drawImage(ov.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+              ctx.restore();
+            }
+          }
         } else {
           ctx.fillStyle = '#182622';
           ctx.fillRect(sx, sy, tileScreenSize + 0.5, tileScreenSize + 0.5);
