@@ -270,6 +270,12 @@
       cursor: pointer;
       margin: 0;
     }
+    label.field input[type="range"] {
+      accent-color: #f97316;
+      width: 72px;
+      cursor: pointer;
+      margin: 0;
+    }
     label.field input[type="number"] {
       background: rgba(0, 0, 0, 0.25);
       border: 1px solid rgba(255, 255, 255, 0.14);
@@ -388,16 +394,14 @@
     <div class="row">
       <div class="title">
         <strong>Generator Animacji tras GPX by Radzio</strong>
-        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx lub kliknij „+1”, aby dodać kolejne pola.</span>
+        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.</span>
       </div>
       <div class="controls">
-        <label class="file-btn" for="fileInput">1. Wgraj GPX</label>
+        <label class="file-btn" for="fileInput">1. Dodaj GPX</label>
         <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple />
         <input id="slotFileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
 
         <button class="action" id="addPoiMapBtn" title="Włącz tryb klikania na mapę, aby stawiać punkty POI" disabled>📍 Dodaj POI</button>
-        <button class="action" id="flipBtn" title="Odwróć kierunek wszystkich tras" disabled>⇄ Odwróć</button>
-        <button class="action" id="randomAllBtn" title="Przypisz losowe kolory wszystkim trasom" disabled>🎲 Random</button>
         <button class="action primary" id="recordBtn" disabled>2. Generuj video</button>
       </div>
     </div>
@@ -444,6 +448,15 @@
           <input id="inShowPoi" type="checkbox" checked />
           <span>Punkty POI</span>
         </label>
+        <label class="field" title="Pokaż lub ukryj etykiety tekstowe przy wszystkich punktach POI">
+          <input id="inShowPoiLabels" type="checkbox" checked />
+          <span>Etykiety POI</span>
+        </label>
+        <label class="field" title="Zbiorcze powiększenie lub pomniejszenie wszystkich ikon POI">
+          <span>Rozmiar POI:</span>
+          <input id="inPoiScale" type="range" min="0.4" max="2.5" step="0.1" value="1" />
+          <span id="poiScaleVal" style="color: var(--text); font-weight: 700; min-width: 34px;">100%</span>
+        </label>
         <label class="field" title="Zaznaczaj POI na wykresie wysokości, gdy track znajdzie się na jego współrzędnych">
           <input id="inShowPoiOnElev" type="checkbox" checked />
           <span>POI na wykresie</span>
@@ -454,7 +467,7 @@
     <div class="section-label"><span>Trasy GPX</span></div>
     <div class="slots-grid" id="slotsGrid"></div>
 
-    <div class="section-label"><span>Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „+1 POI” poniżej)</span></div>
+    <div class="section-label"><span>Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „Dodaj POI” poniżej)</span></div>
     <div class="pois-grid" id="poisGrid"></div>
   </div>
 
@@ -464,7 +477,7 @@
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
         <h2>1. Wrzuć pliki .gpx</h2>
-        <p>Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>+1</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wklejając współrzędne.</p>
+        <p>Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.</p>
       </div>
     </div>
   </div>
@@ -482,8 +495,6 @@
     const poisGrid = document.getElementById('poisGrid');
 
     const addPoiMapBtn = document.getElementById('addPoiMapBtn');
-    const flipBtn = document.getElementById('flipBtn');
-    const randomAllBtn = document.getElementById('randomAllBtn');
     const recordBtn = document.getElementById('recordBtn');
     const statusText = document.getElementById('statusText');
 
@@ -494,6 +505,9 @@
     const inShowElev = document.getElementById('inShowElev');
     const inShowLegend = document.getElementById('inShowLegend');
     const inShowPoi = document.getElementById('inShowPoi');
+    const inShowPoiLabels = document.getElementById('inShowPoiLabels');
+    const inPoiScale = document.getElementById('inPoiScale');
+    const poiScaleVal = document.getElementById('poiScaleVal');
     const inShowPoiOnElev = document.getElementById('inShowPoiOnElev');
 
     const BASIC_COLORS = [
@@ -703,10 +717,9 @@
     const slots = [createSlot(0)];
     let pendingSlotIndex = 0;
 
-    // Lista punktów POI (zarówno ręcznych, jak i wczytanych z GPX <wpt>)
-    let pois = []; // [{ id, name, lat, lon, wx, wy, color, icon, sourceSlot, trackMatches }]
+    let pois = [];
     let nextPoiId = 1;
-    let mapPickMode = null; // null | 'add' | poiId (przenoszenie konkretnego POI)
+    let mapPickMode = null;
 
     let globalMaxKm = 1;
     let globalHasElevation = false;
@@ -872,7 +885,6 @@
 
       if (rawPts.length < 2) throw new Error(`Brak punktów trasy w pliku: ${fileName}`);
 
-      // Wczytaj waypointy <wpt> z pliku GPX (opcjonalne POI)
       const importedWpts = [];
       doc.querySelectorAll('wpt').forEach((wpt) => {
         const lat = parseFloat(wpt.getAttribute('lat'));
@@ -1031,7 +1043,6 @@
       return slots.filter((s) => s.track !== null);
     }
 
-    // Dopasowuje każdy POI do najbliższego odcinka każdego z aktywnych tracków (dla synchronizacji z wykresem)
     function syncPoisWithTracks() {
       const active = getActiveSlots();
       for (const poi of pois) {
@@ -1163,7 +1174,7 @@
         const card = document.createElement('div');
         if (!slot.track) {
           card.className = 'slot-card empty';
-          card.innerHTML = `<span>+ Wgraj GPX #${idx + 1}</span>`;
+          card.innerHTML = `<span>Dodaj GPX #${idx + 1}</span>`;
           if (slots.length > 1) {
             const remBtn = document.createElement('button');
             remBtn.type = 'button';
@@ -1237,7 +1248,6 @@
           delBtn.textContent = '×';
           delBtn.title = 'Usuń ten plik GPX';
           delBtn.addEventListener('click', () => {
-            // Usuń powiązane automatyczne POI z tego pliku
             pois = pois.filter((p) => p.sourceSlot !== idx);
             if (slots.length > 1) {
               slots.splice(idx, 1);
@@ -1289,7 +1299,7 @@
       const addBtn = document.createElement('button');
       addBtn.type = 'button';
       addBtn.className = 'add-slot-btn';
-      addBtn.innerHTML = '<span>+1</span><span style="font-size:12px;font-weight:600;">Dodaj pole GPX</span>';
+      addBtn.innerHTML = '<span>Dodaj kolejny GPX</span>';
       addBtn.title = 'Dodaj kolejne pole do wgrania pliku GPX';
       addBtn.addEventListener('click', () => {
         slots.push(createSlot(slots.length));
@@ -1363,7 +1373,6 @@
         head.appendChild(nameWrap);
         head.appendChild(miniBtns);
 
-        // Wiersz: wklejanie współrzędnych (lat, lon) + wybór ikony
         const coordRow = document.createElement('div');
         coordRow.className = 'slot-head';
 
@@ -1426,8 +1435,8 @@
       const addPoiBtn = document.createElement('button');
       addPoiBtn.type = 'button';
       addPoiBtn.className = 'add-slot-btn poi-add';
-      addPoiBtn.innerHTML = '<span>+1 POI</span><span style="font-size:11px;font-weight:600;">(lub wklej lat, lon)</span>';
-      addPoiBtn.title = 'Dodaj nowy punkt POI (możesz wkleić współrzędne albo kliknąć 🎯 na mapie)';
+      addPoiBtn.innerHTML = '<span>Dodaj POI (lub wpisz lat, lon)</span>';
+      addPoiBtn.title = 'Dodaj nowy punkt POI (możesz wpisać współrzędne albo kliknąć 🎯 na mapie)';
       addPoiBtn.addEventListener('click', () => {
         const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
         addPoiItem({ name: `POI #${pois.length + 1}`, lat, lon });
@@ -1443,10 +1452,8 @@
         setPickMode(null);
         dropOverlay.classList.remove('hidden');
         addPoiMapBtn.disabled = true;
-        flipBtn.disabled = true;
-        randomAllBtn.disabled = true;
         recordBtn.disabled = true;
-        statusText.textContent = 'Krok 1: Wgraj plik .gpx lub kliknij „+1”, aby dodać kolejne pola.';
+        statusText.textContent = 'Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.';
         if (rafId) cancelAnimationFrame(rafId);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         return;
@@ -1454,8 +1461,6 @@
 
       dropOverlay.classList.add('hidden');
       addPoiMapBtn.disabled = false;
-      flipBtn.disabled = false;
-      randomAllBtn.disabled = false;
       recordBtn.disabled = false;
 
       recomputeGlobalTimeline();
@@ -1479,7 +1484,6 @@
           const parsed = parseSingleGPX(text, files[i].name);
           slots[targetIdx].track = parsed;
 
-          // Usuń stare auto-POI dla tego slotu i wczytaj nowe <wpt>, jeśli plik GPX je ma
           pois = pois.filter((p) => p.sourceSlot !== targetIdx);
           for (const w of parsed.importedWpts) {
             pois.push({
@@ -1840,9 +1844,8 @@
       ctx.restore();
     }
 
-    // Rysowanie wybranej ikony POI na mapie (romb, pinezka, flaga, cel, kropka)
-    function drawPoiMarker(x, y, unitSize, poi) {
-      const r = unitSize * 0.0082;
+    function drawPoiMarker(x, y, unitSize, poi, poiScale = 1) {
+      const r = unitSize * 0.0082 * poiScale;
       const hex = poi.color.hex;
       const outline = poi.color.key === 'white' ? '#111827' : '#ffffff';
 
@@ -1851,7 +1854,7 @@
       ctx.shadowBlur = 8;
       ctx.fillStyle = hex;
       ctx.strokeStyle = outline;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = Math.max(1.5, 2 * Math.sqrt(poiScale));
 
       if (poi.icon === 'diamond') {
         ctx.beginPath();
@@ -1879,7 +1882,7 @@
       } else if (poi.icon === 'flag') {
         ctx.shadowBlur = 0;
         ctx.strokeStyle = outline;
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = Math.max(1.6, 2.4 * Math.sqrt(poiScale));
         ctx.beginPath();
         ctx.moveTo(x, y + r * 0.4);
         ctx.lineTo(x, y - r * 2.1);
@@ -1892,17 +1895,17 @@
         ctx.lineTo(x, y - r * 0.9);
         ctx.closePath();
         ctx.fill();
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = Math.max(1.2, 1.4 * Math.sqrt(poiScale));
         ctx.stroke();
       } else if (poi.icon === 'target') {
         ctx.beginPath();
         ctx.arc(x, y, r * 1.05, 0, Math.PI * 2);
         ctx.strokeStyle = hex;
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = Math.max(1.6, 2.4 * Math.sqrt(poiScale));
         ctx.stroke();
         ctx.shadowBlur = 0;
         ctx.strokeStyle = outline;
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = Math.max(1.2, 1.4 * Math.sqrt(poiScale));
         ctx.beginPath();
         ctx.moveTo(x - r * 1.4, y); ctx.lineTo(x - r * 0.5, y);
         ctx.moveTo(x + r * 0.5, y); ctx.lineTo(x + r * 1.4, y);
@@ -2023,7 +2026,7 @@
         st: getTrackStateAtSimTime(slot.track, currentSimMs)
       }));
 
-      // 2. Ślady tracków (rysują się progresywnie za kropkami)
+      // 2. Ślady tracków (efekt rysowania)
       for (const { slot, st } of states) {
         const trk = slot.track;
         const col = slot.color;
@@ -2063,14 +2066,18 @@
         }
       }
 
-      // 3. Punkty POI na mapie (pod kropkami tracków)
+      // 3. Punkty POI na mapie (zbiorcze skalowanie ikon oraz pokaz/ukryj etykiety)
       const showPois = inShowPoi.checked;
+      const showPoiLabels = inShowPoiLabels.checked;
+      const poiScale = parseFloat(inPoiScale.value) || 1;
       if (showPois && pois.length > 0) {
         for (const poi of pois) {
           const psp = worldToScreen(poi.wx, poi.wy);
-          drawPoiMarker(psp.x, psp.y, unitSize, poi);
-          const lblOff = poi.icon === 'pin' || poi.icon === 'flag' ? unitSize * 0.022 : unitSize * 0.013;
-          drawFloatingPill(psp.x, psp.y, lblOff, unitSize, mapY, mapW, mapH, poi.color.hex, poi.name, true);
+          drawPoiMarker(psp.x, psp.y, unitSize, poi, poiScale);
+          if (showPoiLabels) {
+            const baseOff = (poi.icon === 'pin' || poi.icon === 'flag') ? unitSize * 0.022 : unitSize * 0.013;
+            drawFloatingPill(psp.x, psp.y, baseOff * poiScale, unitSize, mapY, mapW, mapH, poi.color.hex, poi.name, true);
+          }
         }
       }
 
@@ -2097,7 +2104,7 @@
 
       ctx.restore();
 
-      // 5. Wspólny wykres wysokości wszystkich tracków + zsynchronizowane POI na wykresie
+      // 5. Wspólny wykres wysokości wszystkich tracków + zsynchronizowane POI
       if (showElev && elevH > 0) {
         const py0 = mapY + mapH;
         ctx.save();
@@ -2181,8 +2188,8 @@
           ctx.stroke();
         }
 
-        // Opcjonalna synchronizacja POI z wykresem (gdy track dojedzie do współrzędnych POI)
         if (showPois && inShowPoiOnElev.checked && pois.length > 0) {
+          const elevDotR = 4.5 * Math.min(1.6, Math.max(0.7, poiScale));
           for (const poi of pois) {
             for (const m of poi.trackMatches) {
               const found = states.find((s) => s.slot === m.slot);
@@ -2204,18 +2211,19 @@
               ctx.strokeStyle = '#ffffff';
               ctx.lineWidth = 1.8;
               ctx.beginPath();
-              ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+              ctx.arc(px, py, elevDotR, 0, Math.PI * 2);
               ctx.fill();
               ctx.stroke();
 
-              // Mała etykietka POI u góry wykresu
-              const lbl = (poi.name || '').trim().slice(0, 14);
-              if (lbl) {
-                ctx.font = `700 ${Math.max(9, Math.round(unitSize * 0.0062))}px Inter, system-ui, sans-serif`;
-                ctx.fillStyle = '#e2e8f0';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom';
-                ctx.fillText(lbl, px, plotY0 - 2);
+              if (showPoiLabels) {
+                const lbl = (poi.name || '').trim().slice(0, 14);
+                if (lbl) {
+                  ctx.font = `700 ${Math.max(9, Math.round(unitSize * 0.0062))}px Inter, system-ui, sans-serif`;
+                  ctx.fillStyle = '#e2e8f0';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'bottom';
+                  ctx.fillText(lbl, px, plotY0 - 2);
+                }
               }
               ctx.restore();
             }
@@ -2390,7 +2398,6 @@
       rafId = requestAnimationFrame(loop);
     }
 
-    // --- Zdarzenia UI i klikanie na mapę (dodawanie / przenoszenie POI) ---
     canvas.addEventListener('click', (e) => {
       if (!mapPickMode || !getActiveSlots().length) return;
       const rect = canvas.getBoundingClientRect();
@@ -2429,6 +2436,11 @@
       setPickMode(mapPickMode === 'add' ? null : 'add');
     });
 
+    inPoiScale.addEventListener('input', () => {
+      const pct = Math.round((parseFloat(inPoiScale.value) || 1) * 100);
+      poiScaleVal.textContent = `${pct}%`;
+    });
+
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length) loadFilesIntoSlots(e.target.files, null);
       fileInput.value = '';
@@ -2443,16 +2455,6 @@
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       if (e.dataTransfer.files.length) loadFilesIntoSlots(e.dataTransfer.files, null);
-    });
-
-    flipBtn.addEventListener('click', () => {
-      slots.forEach((s, i) => { if (s.track) reverseTrack(i); });
-    });
-
-    randomAllBtn.addEventListener('click', () => {
-      const shuffled = [...BASIC_COLORS].sort(() => Math.random() - 0.5);
-      slots.forEach((s, i) => { s.color = shuffled[i % shuffled.length]; });
-      renderSlotsUI();
     });
 
     inTimeSync.addEventListener('change', () => {
