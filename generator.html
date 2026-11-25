@@ -1,0 +1,2760 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Generator Animacji tras GPX by Radzio</title>
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <style>
+    :root {
+      --bg: #0b1311;
+      --panel: #13201c;
+      --accent: #f97316;
+      --text: #f3f7f5;
+      --muted: #94a8a0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #162822 0%, var(--bg) 70%);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 18px;
+      gap: 14px;
+    }
+    .toolbar {
+      width: 100%;
+      max-width: 1260px;
+      background: rgba(19, 32, 28, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      backdrop-filter: blur(10px);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .title { display: flex; flex-direction: column; gap: 2px; }
+    .title strong { font-size: 16px; }
+    .status { font-size: 12px; color: var(--muted); }
+
+    .controls, .inputs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .lang-switch {
+      display: inline-flex;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .lang-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 5px 9px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .lang-btn.active {
+      background: #ea580c;
+      color: #ffffff;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slots-grid, .pois-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+      gap: 7px;
+      width: 100%;
+    }
+    .slot-card {
+      position: relative;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 7px 9px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-height: 70px;
+      justify-content: center;
+    }
+    .slot-card.empty {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.2);
+      align-items: center;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .slot-card.empty:hover {
+      background: rgba(249, 115, 22, 0.08);
+      border-color: rgba(249, 115, 22, 0.55);
+      color: var(--text);
+    }
+    .empty-remove {
+      position: absolute;
+      top: 5px;
+      right: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--muted);
+      border-radius: 5px;
+      padding: 0 5px;
+      font-size: 11px;
+      line-height: 1.4;
+      cursor: pointer;
+    }
+    .empty-remove:hover { color: #fff; background: rgba(255, 255, 255, 0.2); }
+
+    .add-slot-btn {
+      appearance: none;
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px dashed rgba(249, 115, 22, 0.55);
+      color: #fdba74;
+      border-radius: 10px;
+      min-height: 70px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s ease, transform 0.12s ease;
+    }
+    .add-slot-btn.poi-add {
+      min-height: 44px;
+      background: rgba(56, 189, 248, 0.1);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: #7dd3fc;
+    }
+    .add-slot-btn.poi-add:hover {
+      background: rgba(56, 189, 248, 0.2);
+      color: #ffffff;
+    }
+    .add-slot-btn:hover:not(:disabled) {
+      background: rgba(249, 115, 22, 0.22);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .slot-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 5px;
+    }
+    .slot-name-wrap {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      flex: 1;
+    }
+    .slot-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .slot-name-input, .poi-coord-input {
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      padding: 2px 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      width: 100%;
+      min-width: 0;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .poi-coord-input {
+      font-weight: 500;
+      font-size: 11px;
+      color: #cbd5e1;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .slot-name-input:focus, .poi-coord-input:focus {
+      border-color: #f97316;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    .poi-icon-select {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 11px;
+      padding: 2px 4px;
+      outline: none;
+      cursor: pointer;
+    }
+    .poi-icon-select option { background: #13201c; color: var(--text); }
+
+    .slot-mini-btns {
+      display: flex;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+    .mini-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      border-radius: 5px;
+      padding: 1px 5px;
+      font-size: 11px;
+      cursor: pointer;
+      line-height: 1.3;
+    }
+    .mini-btn:hover { background: rgba(255, 255, 255, 0.18); }
+    .mini-btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+    .slot-meta {
+      font-size: 10.5px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .palette-row {
+      display: flex;
+      align-items: center;
+      gap: 3.5px;
+      flex-wrap: wrap;
+    }
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      padding: 0;
+      transition: transform 0.1s ease;
+    }
+    .swatch:hover { transform: scale(1.18); }
+    .swatch.active {
+      border-color: #ffffff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+      transform: scale(1.12);
+    }
+
+    label.field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 5px 10px;
+      border-radius: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+    }
+    label.field input[type="checkbox"] {
+      accent-color: #f97316;
+      cursor: pointer;
+      margin: 0;
+    }
+    label.field input[type="range"] {
+      accent-color: #f97316;
+      width: 72px;
+      cursor: pointer;
+      margin: 0;
+    }
+    label.field input[type="number"] {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      width: 56px;
+      padding: 2px 6px;
+      outline: none;
+    }
+    label.field input[type="number"]:focus { border-color: #f97316; }
+    label.field select {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      outline: none;
+    }
+    label.field select option { background: #13201c; color: var(--text); }
+
+    button.action, .file-btn {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #1d302a;
+      color: var(--text);
+      padding: 8px 13px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+    button.action:hover:not(:disabled), .file-btn:hover { background: #264038; transform: translateY(-1px); }
+    button.action.active-mode {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+    button.primary {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border-color: #fb923c;
+      color: #fff;
+    }
+    button.primary:hover:not(:disabled) { background: linear-gradient(135deg, #fb923c, #f97316); }
+    button:disabled { opacity: 0.42; cursor: not-allowed; transform: none; }
+    input[type="file"] { display: none; }
+
+    .coffee-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      background: #ffdd00;
+      border: 1px solid #fde047;
+      color: #111827;
+      padding: 8px 13px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(255, 221, 0, 0.22);
+      transition: transform 0.12s ease, background 0.15s ease, box-shadow 0.15s ease;
+    }
+    .coffee-btn:hover {
+      background: #ffe642;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(255, 221, 0, 0.34);
+    }
+
+    .stage-wrap {
+      position: relative;
+      width: 100%;
+      max-width: 1260px;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      background: #0f1916;
+      display: flex;
+      justify-content: center;
+    }
+    canvas {
+      position: relative;
+      z-index: 1;
+      display: block;
+      max-width: 100%;
+      max-height: 76vh;
+      width: auto;
+      height: auto;
+    }
+    .drop-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(11, 19, 17, 0.88);
+      text-align: center;
+      padding: 24px;
+      cursor: pointer;
+      transition: opacity 0.25s ease;
+    }
+    .drop-overlay.hidden { opacity: 0; pointer-events: none; }
+    .drop-box {
+      border: 2px dashed rgba(249, 115, 22, 0.65);
+      border-radius: 18px;
+      padding: 40px 48px;
+      max-width: 580px;
+      background: rgba(249, 115, 22, 0.07);
+    }
+    .drop-box h2 { margin: 0 0 8px; font-size: 21px; }
+    .drop-box p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
+
+    #mlMapWrap {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 0;
+      display: none;
+    }
+    #mlMap {
+      width: 1600px;
+      height: 720px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <div class="row">
+      <div class="title">
+        <strong data-i18n="appTitle">Generator Animacji tras GPX by Radzio</strong>
+        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.</span>
+      </div>
+      <div class="controls">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn active" data-lang="pl">PL</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <label class="file-btn" for="fileInput" data-i18n="btnAddGpx">1. Dodaj GPX</label>
+        <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple />
+        <input id="slotFileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
+
+        <button class="action" id="addPoiMapBtn" disabled data-i18n="btnAddPoiMap">📍 Dodaj POI</button>
+        <button class="action primary" id="recordBtn" disabled data-i18n="btnGenerate">2. Generuj video</button>
+        <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="coffee-btn" data-i18n="btnCoffee">☕ Podoba się? Możesz kupić mi kawę :)</a>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="inputs">
+        <label class="field"><span data-i18n="lblMap">Mapa:</span>
+          <select id="inMapStyle">
+            <option value="osm" selected>OpenStreetMap</option>
+            <option value="dark_mode">Dark Mode</option>
+            <option value="topo_relief">Topo 3D (Relief)</option>
+            <option value="cyclosm" data-i18n="optCyclosm">CyclOSM (Rowerowa)</option>
+            <option value="opentopo">OpenTopoMap</option>
+            <option value="esri_topo">Topo (ArcGIS)</option>
+            <option value="esri_street" data-i18n="optStreets">Uliczna (ArcGIS)</option>
+            <option value="esri_sat" data-i18n="optSat">Satelita (Esri)</option>
+          </select>
+        </label>
+        <label class="field"><span data-i18n="lblFormat">Format:</span>
+          <select id="inAspect">
+            <option value="1600x900" selected data-i18n="optLand">16:9 (Poziom)</option>
+            <option value="1080x1920" data-i18n="optPort">9:16 (Reels / Shorts)</option>
+            <option value="1080x1080" data-i18n="optSq">1:1 (Kwadrat)</option>
+          </select>
+        </label>
+        <label class="field"><span data-i18n="lblTimeSync">Czas jazdy:</span>
+          <select id="inTimeSync">
+            <option value="clock" selected data-i18n="optClock">Wg godziny (start/koniec z GPX)</option>
+            <option value="relative" data-i18n="optRel">Wspólny start (00:00)</option>
+          </select>
+        </label>
+        <label class="field"><span data-i18n="lblDur">Czas (s):</span>
+          <input id="inDuration" type="number" min="1" max="300" step="1" value="9" />
+        </label>
+        <label class="field">
+          <input id="inShowElev" type="checkbox" checked />
+          <span data-i18n="lblElev">Wykres wysokości</span>
+        </label>
+        <label class="field">
+          <input id="inShowLegend" type="checkbox" checked />
+          <span data-i18n="lblLegend">Legenda</span>
+        </label>
+        <label class="field">
+          <input id="inShowPoi" type="checkbox" checked />
+          <span data-i18n="lblPois">Punkty POI</span>
+        </label>
+        <label class="field">
+          <input id="inShowPoiLabels" type="checkbox" checked />
+          <span data-i18n="lblPoiLabels">Etykiety POI</span>
+        </label>
+        <label class="field">
+          <span data-i18n="lblPoiSize">Rozmiar POI:</span>
+          <input id="inPoiScale" type="range" min="0.4" max="2.5" step="0.1" value="1" />
+          <span id="poiScaleVal" style="color: var(--text); font-weight: 700; min-width: 34px;">100%</span>
+        </label>
+        <label class="field">
+          <input id="inShowPoiOnElev" type="checkbox" checked />
+          <span data-i18n="lblPoiOnElev">POI na wykresie</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section-label"><span data-i18n="secTracks">Trasy GPX</span></div>
+    <div class="slots-grid" id="slotsGrid"></div>
+
+    <div class="section-label"><span data-i18n="secPois">Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „Dodaj POI” poniżej)</span></div>
+    <div class="pois-grid" id="poisGrid"></div>
+  </div>
+
+  <div class="stage-wrap" id="dropZone">
+    <div id="mlMapWrap"><div id="mlMap"></div></div>
+    <canvas id="canvas" width="1600" height="900"></canvas>
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-box">
+        <h2 data-i18n="dropTitle">1. Wrzuć pliki .gpx</h2>
+        <p data-i18n-html="dropSub">Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const mlMapWrap = document.getElementById('mlMapWrap');
+    const mlContainer = document.getElementById('mlMap');
+    const fileInput = document.getElementById('fileInput');
+    const slotFileInput = document.getElementById('slotFileInput');
+    const dropZone = document.getElementById('dropZone');
+    const dropOverlay = document.getElementById('dropOverlay');
+    const slotsGrid = document.getElementById('slotsGrid');
+    const poisGrid = document.getElementById('poisGrid');
+
+    const addPoiMapBtn = document.getElementById('addPoiMapBtn');
+    const recordBtn = document.getElementById('recordBtn');
+    const statusText = document.getElementById('statusText');
+
+    const inMapStyle = document.getElementById('inMapStyle');
+    const inAspect = document.getElementById('inAspect');
+    const inTimeSync = document.getElementById('inTimeSync');
+    const inDuration = document.getElementById('inDuration');
+    const inShowElev = document.getElementById('inShowElev');
+    const inShowLegend = document.getElementById('inShowLegend');
+    const inShowPoi = document.getElementById('inShowPoi');
+    const inShowPoiLabels = document.getElementById('inShowPoiLabels');
+    const inPoiScale = document.getElementById('inPoiScale');
+    const poiScaleVal = document.getElementById('poiScaleVal');
+    const inShowPoiOnElev = document.getElementById('inShowPoiOnElev');
+
+    const I18N = {
+      pl: {
+        docTitle: 'Generator Animacji tras GPX by Radzio',
+        appTitle: 'Generator Animacji tras GPX by Radzio',
+        btnAddGpx: '1. Dodaj GPX',
+        btnAddPoiMap: '📍 Dodaj POI',
+        btnGenerate: '2. Generuj video',
+        btnCoffee: '☕ Podoba się? Możesz kupić mi kawę :)',
+        lblMap: 'Mapa:',
+        optCyclosm: 'CyclOSM (Rowerowa)',
+        optStreets: 'Uliczna (ArcGIS)',
+        optSat: 'Satelita (Esri)',
+        lblFormat: 'Format:',
+        optLand: '16:9 (Poziom)',
+        optPort: '9:16 (Reels / Shorts)',
+        optSq: '1:1 (Kwadrat)',
+        lblTimeSync: 'Czas jazdy:',
+        optClock: 'Wg godziny (start/koniec z GPX)',
+        optRel: 'Wspólny start (00:00)',
+        lblDur: 'Czas (s):',
+        lblElev: 'Wykres wysokości',
+        lblLegend: 'Legenda',
+        lblPois: 'Punkty POI',
+        lblPoiLabels: 'Etykiety POI',
+        lblPoiSize: 'Rozmiar POI:',
+        lblPoiOnElev: 'POI na wykresie',
+        secTracks: 'Trasy GPX',
+        secPois: 'Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „Dodaj POI” poniżej)',
+        dropTitle: '1. Wrzuć pliki .gpx',
+        dropSub: 'Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.',
+        statusInit: 'Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.',
+        statusLoaded: (n, poiTxt, maxKm) => `Załadowano ${n} tras${poiTxt} • Najdłuższa: ${maxKm} km - kliknij „2. Generuj video”.`,
+        statusPickAdd: 'Tryb dodawania POI: kliknij wybrane miejsce na mapie (Esc lub kliknij „📍 Dodaj POI”, aby zakończyć).',
+        statusPickMove: 'Kliknij na mapę, aby przenieść wybrany punkt POI w nowe miejsce (Esc = anuluj).',
+        statusOsmBlocked: 'Podgląd lokalny bez nagłówka Referer (OSM 403) - na GitHub Pages OpenStreetMap zadziała, a lokalnie możesz wybrać Dark Mode lub Topo.',
+        slotAddN: (n) => `Dodaj GPX #${n}`,
+        slotAddNext: 'Dodaj kolejny GPX',
+        poiAddBtn: 'Dodaj POI (lub wpisz lat, lon)',
+        poiIcons: { diamond: '◆ Romb', pin: '📍 Pinezka', flag: '⚑ Flaga', target: '⌖ Cel', dot: '● Kropka' },
+        hudHour: 'Godzina',
+        hudElapsed: 'Czas',
+        hudWait: ' (czeka)',
+        recFetch: 'Pobieranie kafelków mapy...',
+        recPrep: 'Przygotowywanie kafelków mapy przed nagraniem...',
+        recProg: (p) => `Nagrywanie ${p}%...`,
+        recStatus: (p) => `Trwa generowanie pliku wideo (${p}%)...`,
+        tipRev: 'Odwróć ten track',
+        tipRand: 'Losowy kolor',
+        tipDelGpx: 'Usuń ten plik GPX',
+        tipDelSlot: 'Usuń ten pusty slot',
+        tipMovePoi: 'Kliknij na mapę, aby przenieść ten POI',
+        tipDelPoi: 'Usuń punkt POI',
+        tipName: 'Wpisz własną nazwę (widoczną w legendzie i przy kropce)',
+        tipCoord: 'Wklej współrzędne (lat, lon) np. z Google Maps'
+      },
+      en: {
+        docTitle: 'GPX Route Animation Generator by Radzio',
+        appTitle: 'GPX Route Animation Generator by Radzio',
+        btnAddGpx: '1. Add GPX',
+        btnAddPoiMap: '📍 Add POI',
+        btnGenerate: '2. Generate video',
+        btnCoffee: '☕ Like it? You can buy me a coffee :)',
+        lblMap: 'Map:',
+        optCyclosm: 'CyclOSM (Cycling)',
+        optStreets: 'Streets (ArcGIS)',
+        optSat: 'Satellite (Esri)',
+        lblFormat: 'Aspect:',
+        optLand: '16:9 (Landscape)',
+        optPort: '9:16 (Reels / Shorts)',
+        optSq: '1:1 (Square)',
+        lblTimeSync: 'Ride timing:',
+        optClock: 'By clock (GPX start/end)',
+        optRel: 'Simultaneous start (00:00)',
+        lblDur: 'Duration (s):',
+        lblElev: 'Elevation chart',
+        lblLegend: 'Legend',
+        lblPois: 'POI markers',
+        lblPoiLabels: 'POI labels',
+        lblPoiSize: 'POI size:',
+        lblPoiOnElev: 'POI on chart',
+        secTracks: 'GPX Tracks',
+        secPois: 'POI Markers (click "📍 Add POI" on map or "Add POI" below)',
+        dropTitle: '1. Drop .gpx files',
+        dropSub: 'Drag & drop <b>.gpx</b> files here or add more fields with <b>Add another GPX</b>.<br>You can also add custom <b>POI</b> markers by clicking on the map or entering coordinates.',
+        statusInit: 'Step 1: Upload a .gpx file or click "Add another GPX" to add more slots.',
+        statusLoaded: (n, poiTxt, maxKm) => `Loaded ${n} track(s)${poiTxt} • Longest: ${maxKm} km - click "2. Generate video".`,
+        statusPickAdd: 'Add POI mode: click anywhere on the map (press Esc or click "📍 Add POI" to finish).',
+        statusPickMove: 'Click on the map to move the selected POI marker (Esc = cancel).',
+        statusOsmBlocked: 'Local preview without Referer header (OSM 403) - OpenStreetMap works on GitHub Pages; locally choose Dark Mode or Topo.',
+        slotAddN: (n) => `Add GPX #${n}`,
+        slotAddNext: 'Add another GPX',
+        poiAddBtn: 'Add POI (or enter lat, lon)',
+        poiIcons: { diamond: '◆ Diamond', pin: '📍 Pin', flag: '⚑ Flag', target: '⌖ Target', dot: '● Dot' },
+        hudHour: 'Time',
+        hudElapsed: 'Elapsed',
+        hudWait: ' (waiting)',
+        recFetch: 'Loading map tiles...',
+        recPrep: 'Preparing map tiles before recording...',
+        recProg: (p) => `Recording ${p}%...`,
+        recStatus: (p) => `Generating video file (${p}%)...`,
+        tipRev: 'Reverse this track',
+        tipRand: 'Random color',
+        tipDelGpx: 'Remove this GPX file',
+        tipDelSlot: 'Remove empty slot',
+        tipMovePoi: 'Click on the map to move this POI',
+        tipDelPoi: 'Delete POI marker',
+        tipName: 'Enter custom name (shown in legend and next to the dot)',
+        tipCoord: 'Paste coordinates (lat, lon) e.g. from Google Maps'
+      }
+    };
+
+    let currentLang = localStorage.getItem('gpx_anim_lang') === 'en' ? 'en' : 'pl';
+    const tr = () => I18N[currentLang];
+
+    const BASIC_COLORS = [
+      { key: 'orange', name: 'Pomarańczowy / Orange', hex: '#f97316', core: '#ffdfba' },
+      { key: 'purple', name: 'Fioletowy / Purple',    hex: '#a855f7', core: '#f3e8ff' },
+      { key: 'blue',   name: 'Niebieski / Blue',      hex: '#3b82f6', core: '#dbeafe' },
+      { key: 'green',  name: 'Zielony / Green',       hex: '#22c55e', core: '#dcfce7' },
+      { key: 'red',    name: 'Czerwony / Red',        hex: '#ef4444', core: '#fecaca' },
+      { key: 'yellow', name: 'Żółty / Yellow',        hex: '#eab308', core: '#fef9c3' },
+      { key: 'teal',   name: 'Turkusowy / Teal',      hex: '#14b8a6', core: '#ccfbf1' },
+      { key: 'pink',   name: 'Różowy / Pink',         hex: '#ec4899', core: '#fce7f3' },
+      { key: 'lime',   name: 'Limonkowy / Lime',      hex: '#84cc16', core: '#ecfccb' },
+      { key: 'sky',    name: 'Błękitny / Sky',        hex: '#0ea5e9', core: '#e0f2fe' }
+    ];
+
+    const POI_COLORS = [
+      ...BASIC_COLORS,
+      { key: 'white', name: 'Biały / White', hex: '#ffffff', core: '#e2e8f0' }
+    ];
+
+    const POI_ICON_KEYS = ['diamond', 'pin', 'flag', 'target', 'dot'];
+
+    const MAP_PROVIDERS = {
+      osm: {
+        attr: '© OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`
+      },
+      dark_mode: {
+        attr: '© OpenFreeMap • OpenMapTiles • OpenStreetMap',
+        maxZ: 18,
+        isVector: true
+      },
+      topo_relief: {
+        attr: '© OpenTopoMap • Esri World Hillshade',
+        maxZ: 17,
+        url: (z, x, y) => `https://a.tile.opentopomap.org/${z}/${x}/${y}.png`,
+        overlayUrl: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/${z}/${y}/${x}`
+      },
+      cyclosm: {
+        attr: '© OpenStreetMap contributors • CyclOSM',
+        maxZ: 18,
+        url: (z, x, y) => `https://a.tile-cyclosm.openstreetmap.fr/cyclosm/${z}/${x}/${y}.png`
+      },
+      opentopo: {
+        attr: '© OpenStreetMap contributors • OpenTopoMap',
+        maxZ: 17,
+        url: (z, x, y) => `https://a.tile.opentopomap.org/${z}/${x}/${y}.png`
+      },
+      esri_topo: {
+        attr: 'Tiles © Esri & OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/${z}/${y}/${x}`
+      },
+      esri_street: {
+        attr: 'Tiles © Esri & OpenStreetMap contributors',
+        maxZ: 18,
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`
+      },
+      esri_sat: {
+        attr: 'Tiles © Esri',
+        maxZ: 18,
+        url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
+      }
+    };
+
+    const DARK_MODE_STYLE = {
+      version: 8,
+      name: 'Dark Mode',
+      sources: {
+        openmaptiles: {
+          type: 'vector',
+          url: 'https://tiles.openfreemap.org/planet'
+        }
+      },
+      layers: [
+        { id: 'background', type: 'background', paint: { 'background-color': '#182028' } },
+        {
+          id: 'landuse_urban', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+          filter: ['in', 'class', 'residential', 'commercial', 'industrial', 'retail', 'suburb', 'neighbourhood'],
+          paint: { 'fill-color': '#2b3438', 'fill-opacity': 0.9 }
+        },
+        {
+          id: 'landcover_grass_wood', type: 'fill', source: 'openmaptiles', 'source-layer': 'landcover',
+          filter: ['in', 'class', 'grass', 'wood', 'wetland', 'farmland'],
+          paint: { 'fill-color': '#3e4b3c', 'fill-opacity': 0.85 }
+        },
+        {
+          id: 'park', type: 'fill', source: 'openmaptiles', 'source-layer': 'park',
+          paint: { 'fill-color': '#495742', 'fill-opacity': 0.78 }
+        },
+        {
+          id: 'landuse_green', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+          filter: ['in', 'class', 'park', 'grass', 'cemetery', 'recreation_ground', 'pitch', 'stadium'],
+          paint: { 'fill-color': '#495742', 'fill-opacity': 0.82 }
+        },
+        {
+          id: 'landuse_rail_yard', type: 'fill', source: 'openmaptiles', 'source-layer': 'landuse',
+          filter: ['==', 'class', 'railway'],
+          paint: { 'fill-color': '#232c3b', 'fill-opacity': 0.95 }
+        },
+        {
+          id: 'aeroway_area', type: 'fill', source: 'openmaptiles', 'source-layer': 'aeroway',
+          paint: { 'fill-color': '#222a34' }
+        },
+        {
+          id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water',
+          paint: { 'fill-color': '#162432' }
+        },
+        {
+          id: 'waterway', type: 'line', source: 'openmaptiles', 'source-layer': 'waterway',
+          paint: { 'line-color': '#21364a', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.8, 15, 3] }
+        },
+        {
+          id: 'road_casing_dark', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+          filter: ['all', ['!=', 'class', 'rail'], ['!=', 'class', 'transit'], ['!=', 'class', 'ferry']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#0f141d',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              8, 1,
+              13, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 5.5, ['secondary', 'tertiary'], 4, 2.2],
+              17, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 14, ['secondary', 'tertiary'], 9, 4.5]
+            ]
+          }
+        },
+        {
+          id: 'building', type: 'fill', source: 'openmaptiles', 'source-layer': 'building',
+          paint: { 'fill-color': '#3e444a', 'fill-outline-color': '#1e242b', 'fill-opacity': 0.88 }
+        },
+        {
+          id: 'road_gold_lines', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+          filter: ['all', ['!=', 'class', 'rail'], ['!=', 'class', 'transit'], ['!=', 'class', 'ferry'], ['!=', 'brunnel', 'bridge']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': [
+              'match', ['get', 'class'],
+              ['path', 'track'], '#968f42',
+              ['minor', 'service'], '#8f8a48',
+              ['secondary', 'tertiary'], '#ada34c',
+              '#c49a5c'
+            ],
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              8, 0.5,
+              14, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 2.2, 1.1],
+              17, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 3.2, 1.5]
+            ],
+            'line-opacity': 0.85
+          }
+        },
+        {
+          id: 'railway_lines', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+          filter: ['in', 'class', 'rail', 'transit'],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#5d7c9c',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.2, 16, 4.5],
+            'line-opacity': 0.45
+          }
+        },
+        {
+          id: 'bridge_copper', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation',
+          filter: ['all', ['==', 'brunnel', 'bridge'], ['!=', 'class', 'rail']],
+          layout: { 'line-cap': 'round', 'line-join': 'round' },
+          paint: {
+            'line-color': '#c98e68',
+            'line-width': [
+              'interpolate', ['linear'], ['zoom'],
+              10, 2,
+              15, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 10, 5],
+              17, ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], 16, 8]
+            ],
+            'line-opacity': 0.48
+          }
+        },
+        {
+          id: 'admin_boundary', type: 'line', source: 'openmaptiles', 'source-layer': 'boundary',
+          filter: ['<=', 'admin_level', 4],
+          paint: { 'line-color': '#64748b', 'line-width': 1, 'line-dasharray': [3, 2], 'line-opacity': 0.45 }
+        }
+      ]
+    };
+
+    function createSlot(idx) {
+      return {
+        track: null,
+        color: BASIC_COLORS[idx % BASIC_COLORS.length]
+      };
+    }
+
+    const slots = [createSlot(0)];
+    let pendingSlotIndex = 0;
+
+    let pois = [];
+    let nextPoiId = 1;
+    let mapPickMode = null;
+
+    let globalMaxKm = 1;
+    let globalHasElevation = false;
+    let globalMinEle = 0;
+    let globalMaxEle = 100;
+    let globalStartMs = 0;
+    let globalEndMs = 1;
+    let globalSpanMs = 1;
+    let useClockLabels = false;
+
+    let overviewCam = { wx: 0.5, wy: 0.5, z: 6 };
+    let lastCam = { wx: 0.5, wy: 0.5, z: 6 };
+    const tileCache = new Map();
+    let osmBlockedNotified = false;
+    let mlMap = null;
+    let mlReady = false;
+
+    let startTime = null;
+    let rafId = null;
+    let isRecording = false;
+
+    const dotLayer = document.createElement('canvas');
+    dotLayer.width = 96;
+    dotLayer.height = 96;
+    const dotCtx = dotLayer.getContext('2d');
+
+    const tileCheckCanvas = document.createElement('canvas');
+    tileCheckCanvas.width = 256;
+    tileCheckCanvas.height = 256;
+    const tileCheckCtx = tileCheckCanvas.getContext('2d', { willReadFrequently: true });
+
+    function applyLanguage(lang) {
+      currentLang = lang === 'en' ? 'en' : 'pl';
+      localStorage.setItem('gpx_anim_lang', currentLang);
+      document.documentElement.lang = currentLang;
+      const t = tr();
+      document.title = t.docTitle;
+
+      document.querySelectorAll('.lang-btn').forEach((b) => {
+        b.classList.toggle('active', b.dataset.lang === currentLang);
+      });
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.dataset.i18n;
+        if (t[key] !== undefined) el.textContent = t[key];
+      });
+      document.querySelectorAll('[data-i18n-html]').forEach((el) => {
+        const key = el.dataset.i18nHtml;
+        if (t[key] !== undefined) el.innerHTML = t[key];
+      });
+
+      renderSlotsUI();
+      renderPoisUI();
+      if (!isRecording) updateStatusLine();
+    }
+
+    document.querySelectorAll('.lang-btn').forEach((btn) => {
+      btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+    });
+
+    function getDurationMs() {
+      const sec = parseFloat(inDuration.value);
+      return Math.max(1, isNaN(sec) ? 9 : sec) * 1000;
+    }
+
+    function isOsmBlockedTile(img) {
+      try {
+        tileCheckCtx.clearRect(0, 0, 256, 256);
+        tileCheckCtx.drawImage(img, 0, 0);
+        const d = tileCheckCtx.getImageData(8, 20, 1, 210).data;
+        let yellow = 0, black = 0;
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          if (r > 240 && g > 240 && b < 20) yellow++;
+          else if (r < 20 && g < 20 && b < 20) black++;
+        }
+        return yellow >= 35 && black >= 35;
+      } catch {
+        return false;
+      }
+    }
+
+    function lonToWorldX(lon) { return (lon + 180) / 360; }
+
+    function latToWorldY(lat) {
+      const clamped = Math.max(-85.0511, Math.min(85.0511, lat));
+      const rad = clamped * Math.PI / 180;
+      return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2;
+    }
+
+    function worldToLonLat(wx, wy) {
+      const lon = wx * 360 - 180;
+      const lat = (Math.atan(Math.sinh(Math.PI * (1 - 2 * wy))) * 180) / Math.PI;
+      return [lon, lat];
+    }
+
+    function parseCoordsText(str) {
+      const nums = (str || '').trim().match(/-?\d+(?:[.,]\d+)?/g);
+      if (!nums || nums.length < 2) return null;
+      const lat = parseFloat(nums[0].replace(',', '.'));
+      const lon = parseFloat(nums[1].replace(',', '.'));
+      if (isNaN(lat) || isNaN(lon) || lat < -85 || lat > 85 || lon < -180 || lon > 180) return null;
+      return { lat, lon };
+    }
+
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function formatClockHHMM(ms, isDuration = false) {
+      if (isDuration) {
+        const totalMin = Math.round(ms / 60000);
+        const h = Math.floor(totalMin / 60);
+        const m = totalMin % 60;
+        return `${h}:${String(m).padStart(2, '0')}`;
+      }
+      const d = new Date(ms);
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+
+    function formatMsOfDayHHMM(msOfDay) {
+      const totalMin = Math.floor((msOfDay % 86400000) / 60000);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    function syncDarkModeVisibility() {
+      const isDark = inMapStyle.value === 'dark_mode';
+      mlMapWrap.style.display = isDark ? 'block' : 'none';
+      if (isDark) {
+        const { mapW, mapH } = getMapViewport();
+        mlContainer.style.width = `${mapW}px`;
+        mlContainer.style.height = `${mapH}px`;
+        if (mlMap) mlMap.resize();
+      }
+    }
+
+    function ensureDarkModeMap() {
+      if (inMapStyle.value !== 'dark_mode' || typeof maplibregl === 'undefined') return null;
+      syncDarkModeVisibility();
+      if (!mlMap) {
+        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
+        mlMap = new maplibregl.Map({
+          container: mlContainer,
+          style: DARK_MODE_STYLE,
+          center: [lon, lat],
+          zoom: Math.max(1, overviewCam.z - 1),
+          interactive: false,
+          attributionControl: false,
+          preserveDrawingBuffer: true,
+          pixelRatio: 1,
+          fadeDuration: 0
+        });
+        mlMap.on('load', () => { mlReady = true; });
+      }
+      return mlMap;
+    }
+
+    function parseSingleGPX(xmlText, fileName) {
+      const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+      if (doc.querySelector('parsererror')) throw new Error(`Invalid GPX: ${fileName}`);
+
+      const metaName = doc.querySelector('metadata > name')?.textContent?.trim();
+      const firstTrkName = doc.querySelector('trk > name, rte > name')?.textContent?.trim();
+      const trackName = metaName || firstTrkName || fileName.replace(/\.gpx$/i, '');
+
+      let rawPts = [];
+      let ptNodes = [...doc.querySelectorAll('trkpt')];
+      if (ptNodes.length < 2) ptNodes = [...doc.querySelectorAll('rtept')];
+
+      for (const pt of ptNodes) {
+        const lat = parseFloat(pt.getAttribute('lat'));
+        const lon = parseFloat(pt.getAttribute('lon'));
+        if (isNaN(lat) || isNaN(lon)) continue;
+        const eleText = pt.querySelector('ele')?.textContent;
+        const ele = eleText !== undefined ? parseFloat(eleText) : null;
+        const timeText = pt.querySelector('time')?.textContent?.trim();
+        const tMs = timeText ? Date.parse(timeText) : NaN;
+        rawPts.push({
+          lat,
+          lon,
+          ele: (ele !== null && !isNaN(ele)) ? ele : null,
+          tMs: !isNaN(tMs) ? tMs : null
+        });
+      }
+
+      if (rawPts.length < 2) throw new Error(`No track points in file: ${fileName}`);
+
+      const importedWpts = [];
+      doc.querySelectorAll('wpt').forEach((wpt) => {
+        const lat = parseFloat(wpt.getAttribute('lat'));
+        const lon = parseFloat(wpt.getAttribute('lon'));
+        const wName = wpt.querySelector('name')?.textContent?.trim() || 'POI';
+        if (!isNaN(lat) && !isNaN(lon)) importedWpts.push({ name: wName, lat, lon });
+      });
+
+      if (rawPts.length > 2500) {
+        const step = Math.ceil(rawPts.length / 2500);
+        const sampled = [];
+        for (let i = 0; i < rawPts.length - 1; i += step) sampled.push(rawPts[i]);
+        sampled.push(rawPts[rawPts.length - 1]);
+        rawPts = sampled;
+      }
+
+      const hasEle = rawPts.some((p) => p.ele !== null);
+      let cumKm = 0;
+      const pts = rawPts.map((p, i) => {
+        if (i > 0) cumKm += haversineKm(rawPts[i - 1].lat, rawPts[i - 1].lon, p.lat, p.lon);
+        return {
+          lat: p.lat,
+          lon: p.lon,
+          wx: lonToWorldX(p.lon),
+          wy: latToWorldY(p.lat),
+          ele: p.ele,
+          smoothEle: p.ele,
+          tMs: p.tMs,
+          relMs: 0,
+          km: cumKm
+        };
+      });
+
+      const totalKm = Math.max(0.01, cumKm);
+
+      let gain = 0, minE = 0, maxE = 100;
+      if (hasEle) {
+        let lastE = pts.find((p) => p.ele !== null)?.ele ?? 0;
+        for (const p of pts) {
+          if (p.ele === null) p.ele = lastE;
+          else lastE = p.ele;
+        }
+        for (let i = 0; i < pts.length; i++) {
+          let sum = 0, cnt = 0;
+          for (let k = -2; k <= 2; k++) {
+            const idx = Math.max(0, Math.min(pts.length - 1, i + k));
+            sum += pts[idx].ele;
+            cnt++;
+          }
+          pts[i].smoothEle = sum / cnt;
+        }
+        minE = Infinity;
+        maxE = -Infinity;
+        let refE = pts[0].smoothEle;
+        for (const p of pts) {
+          if (p.smoothEle < minE) minE = p.smoothEle;
+          if (p.smoothEle > maxE) maxE = p.smoothEle;
+          const diff = p.smoothEle - refE;
+          if (diff >= 2.5) { gain += diff; refE = p.smoothEle; }
+          else if (diff <= -2.5) { refE = p.smoothEle; }
+        }
+      }
+
+      const timedIndices = [];
+      for (let i = 0; i < pts.length; i++) {
+        if (pts[i].tMs !== null) timedIndices.push(i);
+      }
+
+      let hasRealTime = timedIndices.length >= 2;
+      let rawStartMs = 0;
+      let rawEndMs = 0;
+
+      if (hasRealTime) {
+        const firstTIdx = timedIndices[0];
+        const lastTIdx = timedIndices[timedIndices.length - 1];
+        const totalTimedDur = Math.max(1000, pts[lastTIdx].tMs - pts[firstTIdx].tMs);
+        const totalTimedKm = Math.max(0.001, pts[lastTIdx].km - pts[firstTIdx].km);
+        const avgMsPerKm = totalTimedDur / totalTimedKm;
+
+        for (let i = 0; i < firstTIdx; i++) {
+          pts[i].tMs = pts[firstTIdx].tMs - (pts[firstTIdx].km - pts[i].km) * avgMsPerKm;
+        }
+        for (let i = lastTIdx + 1; i < pts.length; i++) {
+          pts[i].tMs = pts[lastTIdx].tMs + (pts[i].km - pts[lastTIdx].km) * avgMsPerKm;
+        }
+        for (let ti = 0; ti < timedIndices.length - 1; ti++) {
+          const a = timedIndices[ti], b = timedIndices[ti + 1];
+          if (b - a > 1) {
+            const dk = Math.max(1e-6, pts[b].km - pts[a].km);
+            const dt = pts[b].tMs - pts[a].tMs;
+            for (let k = a + 1; k < b; k++) {
+              pts[k].tMs = pts[a].tMs + ((pts[k].km - pts[a].km) / dk) * dt;
+            }
+          }
+        }
+        rawStartMs = pts[0].tMs;
+        rawEndMs = pts[pts.length - 1].tMs;
+        if (rawEndMs <= rawStartMs) hasRealTime = false;
+      }
+
+      if (!hasRealTime) {
+        const estDurMs = Math.max(60000, (totalKm / 20) * 3600 * 1000);
+        rawStartMs = 0;
+        rawEndMs = estDurMs;
+        for (const p of pts) {
+          p.tMs = (p.km / totalKm) * estDurMs;
+        }
+      }
+
+      const durationMs = Math.max(1000, rawEndMs - rawStartMs);
+      for (let i = 0; i < pts.length; i++) {
+        pts[i].relMs = Math.max(0, pts[i].tMs - rawStartMs);
+        if (i > 0 && pts[i].relMs < pts[i - 1].relMs) pts[i].relMs = pts[i - 1].relMs;
+      }
+
+      const gapKm = haversineKm(pts[0].lat, pts[0].lon, pts[pts.length - 1].lat, pts[pts.length - 1].lon);
+      const isLoop = gapKm < Math.max(0.4, totalKm * 0.025);
+
+      return {
+        name: trackName,
+        pts,
+        importedWpts,
+        totalKm,
+        gain,
+        hasEle,
+        minEle: minE,
+        maxEle: maxE,
+        hasRealTime,
+        rawStartMs,
+        rawEndMs,
+        durationMs,
+        simStartMs: 0,
+        simEndMs: durationMs,
+        isLoop
+      };
+    }
+
+    function reverseTrack(slotIdx) {
+      const trk = slots[slotIdx]?.track;
+      if (!trk || trk.pts.length < 2) return;
+      const rev = [...trk.pts].reverse();
+      let cumKm = 0;
+      const oldDur = trk.durationMs;
+      const oldRelTimes = trk.pts.map((p) => p.relMs);
+      for (let i = 0; i < rev.length; i++) {
+        if (i > 0) cumKm += haversineKm(rev[i - 1].lat, rev[i - 1].lon, rev[i].lat, rev[i].lon);
+        rev[i].km = cumKm;
+        rev[i].relMs = oldDur - oldRelTimes[trk.pts.length - 1 - i];
+      }
+      trk.pts = rev;
+      recomputeGlobalTimeline();
+      startAnimation();
+    }
+
+    function getActiveSlots() {
+      return slots.filter((s) => s.track !== null);
+    }
+
+    function syncPoisWithTracks() {
+      const active = getActiveSlots();
+      for (const poi of pois) {
+        poi.trackMatches = [];
+        for (const slot of active) {
+          const trk = slot.track;
+          if (!trk.hasEle) continue;
+          let bestIdx = 0, bestDist = Infinity;
+          for (let i = 0; i < trk.pts.length; i++) {
+            const d = haversineKm(poi.lat, poi.lon, trk.pts[i].lat, trk.pts[i].lon);
+            if (d < bestDist) { bestDist = d; bestIdx = i; }
+          }
+          const thresholdKm = Math.max(0.25, Math.min(2.0, trk.totalKm * 0.015));
+          if (bestDist <= thresholdKm) {
+            poi.trackMatches.push({
+              slot,
+              km: trk.pts[bestIdx].km,
+              ele: trk.pts[bestIdx].smoothEle
+            });
+          }
+        }
+      }
+    }
+
+    function addPoiItem({ name, lat, lon, color, icon = 'diamond', sourceSlot = null }) {
+      const item = {
+        id: nextPoiId++,
+        name: name || `POI #${pois.length + 1}`,
+        lat,
+        lon,
+        wx: lonToWorldX(lon),
+        wy: latToWorldY(lat),
+        color: color || POI_COLORS[pois.length % POI_COLORS.length],
+        icon,
+        sourceSlot,
+        trackMatches: []
+      };
+      pois.push(item);
+      syncPoisWithTracks();
+      renderPoisUI();
+      return item;
+    }
+
+    function recomputeGlobalTimeline() {
+      const active = getActiveSlots();
+      if (active.length === 0) return;
+
+      globalMaxKm = Math.max(0.1, ...active.map((s) => s.track.totalKm));
+      globalHasElevation = active.some((s) => s.track.hasEle);
+
+      if (globalHasElevation) {
+        const eleTracks = active.filter((s) => s.track.hasEle);
+        globalMinEle = Math.min(...eleTracks.map((s) => s.track.minEle));
+        globalMaxEle = Math.max(...eleTracks.map((s) => s.track.maxEle));
+        if (globalMaxEle - globalMinEle < 10) globalMaxEle = globalMinEle + 20;
+      }
+
+      const mode = inTimeSync.value;
+      const realTracks = active.filter((s) => s.track.hasRealTime);
+
+      if (mode === 'clock' && realTracks.length > 0) {
+        const minReal = Math.min(...realTracks.map((s) => s.track.rawStartMs));
+        const maxReal = Math.max(...realTracks.map((s) => s.track.rawEndMs));
+        const samePeriod = (maxReal - minReal) <= 36 * 3600 * 1000;
+
+        if (samePeriod) {
+          useClockLabels = 'epoch';
+          for (const s of active) {
+            if (s.track.hasRealTime) {
+              s.track.simStartMs = s.track.rawStartMs;
+              s.track.simEndMs = s.track.rawEndMs;
+            } else {
+              s.track.simStartMs = minReal;
+              s.track.simEndMs = minReal + s.track.durationMs;
+            }
+          }
+        } else {
+          useClockLabels = 'timeOfDay';
+          let earliestDayMs = Infinity;
+          for (const s of realTracks) {
+            const d = new Date(s.track.rawStartMs);
+            const msOfDay = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+            s.track.simStartMs = msOfDay;
+            s.track.simEndMs = msOfDay + s.track.durationMs;
+            if (msOfDay < earliestDayMs) earliestDayMs = msOfDay;
+          }
+          for (const s of active) {
+            if (!s.track.hasRealTime) {
+              s.track.simStartMs = earliestDayMs;
+              s.track.simEndMs = earliestDayMs + s.track.durationMs;
+            }
+          }
+        }
+      } else {
+        useClockLabels = false;
+        for (const s of active) {
+          s.track.simStartMs = 0;
+          s.track.simEndMs = s.track.durationMs;
+        }
+      }
+
+      globalStartMs = Math.min(...active.map((s) => s.track.simStartMs));
+      globalEndMs = Math.max(...active.map((s) => s.track.simEndMs));
+      globalSpanMs = Math.max(1000, globalEndMs - globalStartMs);
+
+      syncPoisWithTracks();
+      computeOverviewCamera();
+      preloadTiles();
+      updateStatusLine();
+    }
+
+    function setPickMode(mode) {
+      mapPickMode = mode;
+      addPoiMapBtn.classList.toggle('active-mode', mode === 'add');
+      canvas.style.cursor = mode ? 'crosshair' : 'default';
+      renderPoisUI();
+      if (mode === 'add') {
+        statusText.textContent = tr().statusPickAdd;
+      } else if (typeof mode === 'number') {
+        statusText.textContent = tr().statusPickMove;
+      } else {
+        updateStatusLine();
+      }
+    }
+
+    function renderSlotsUI() {
+      const t = tr();
+      slotsGrid.innerHTML = '';
+      slots.forEach((slot, idx) => {
+        const card = document.createElement('div');
+        if (!slot.track) {
+          card.className = 'slot-card empty';
+          card.innerHTML = `<span>${t.slotAddN(idx + 1)}</span>`;
+          if (slots.length > 1) {
+            const remBtn = document.createElement('button');
+            remBtn.type = 'button';
+            remBtn.className = 'empty-remove';
+            remBtn.textContent = '×';
+            remBtn.title = t.tipDelSlot;
+            remBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              slots.splice(idx, 1);
+              renderSlotsUI();
+            });
+            card.appendChild(remBtn);
+          }
+          card.addEventListener('click', () => {
+            pendingSlotIndex = idx;
+            slotFileInput.value = '';
+            slotFileInput.click();
+          });
+          card.addEventListener('dragover', (e) => e.preventDefault());
+          card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer.files[0]) loadFilesIntoSlots([e.dataTransfer.files[0]], idx);
+          });
+        } else {
+          const trk = slot.track;
+          card.className = 'slot-card';
+
+          const head = document.createElement('div');
+          head.className = 'slot-head';
+
+          const nameWrap = document.createElement('div');
+          nameWrap.className = 'slot-name-wrap';
+
+          const dot = document.createElement('span');
+          dot.className = 'slot-dot';
+          dot.style.background = slot.color.hex;
+
+          const nameInp = document.createElement('input');
+          nameInp.type = 'text';
+          nameInp.className = 'slot-name-input';
+          nameInp.value = trk.name;
+          nameInp.placeholder = `Track #${idx + 1}`;
+          nameInp.title = t.tipName;
+          nameInp.addEventListener('input', () => { trk.name = nameInp.value; });
+
+          nameWrap.appendChild(dot);
+          nameWrap.appendChild(nameInp);
+
+          const miniBtns = document.createElement('div');
+          miniBtns.className = 'slot-mini-btns';
+
+          const revBtn = document.createElement('button');
+          revBtn.className = 'mini-btn';
+          revBtn.textContent = '⇄';
+          revBtn.title = t.tipRev;
+          revBtn.addEventListener('click', () => reverseTrack(idx));
+
+          const randBtn = document.createElement('button');
+          randBtn.className = 'mini-btn';
+          randBtn.textContent = '🎲';
+          randBtn.title = t.tipRand;
+          randBtn.addEventListener('click', () => {
+            const others = BASIC_COLORS.filter((c) => c.key !== slot.color.key);
+            slot.color = others[Math.floor(Math.random() * others.length)];
+            renderSlotsUI();
+          });
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'mini-btn';
+          delBtn.textContent = '×';
+          delBtn.title = t.tipDelGpx;
+          delBtn.addEventListener('click', () => {
+            pois = pois.filter((p) => p.sourceSlot !== idx);
+            if (slots.length > 1) {
+              slots.splice(idx, 1);
+              pois.forEach((p) => { if (p.sourceSlot !== null && p.sourceSlot > idx) p.sourceSlot--; });
+            } else {
+              slots[0].track = null;
+            }
+            onTracksChanged();
+          });
+
+          miniBtns.appendChild(revBtn);
+          miniBtns.appendChild(randBtn);
+          miniBtns.appendChild(delBtn);
+
+          head.appendChild(nameWrap);
+          head.appendChild(miniBtns);
+
+          const meta = document.createElement('div');
+          meta.className = 'slot-meta';
+          const durTxt = formatClockHHMM(trk.durationMs, true);
+          const timeRangeTxt = trk.hasRealTime
+            ? `${formatClockHHMM(trk.rawStartMs)}–${formatClockHHMM(trk.rawEndMs)}`
+            : `~${durTxt}`;
+          const eleInfo = trk.hasEle ? ` • ↑${Math.round(trk.gain)}m` : '';
+          meta.textContent = `${trk.totalKm.toFixed(1)} km${eleInfo} • ${timeRangeTxt}`;
+
+          const palRow = document.createElement('div');
+          palRow.className = 'palette-row';
+          BASIC_COLORS.forEach((c) => {
+            const sw = document.createElement('button');
+            sw.type = 'button';
+            sw.className = 'swatch' + (slot.color.key === c.key ? ' active' : '');
+            sw.style.background = c.hex;
+            sw.title = c.name;
+            sw.addEventListener('click', () => {
+              slot.color = c;
+              renderSlotsUI();
+            });
+            palRow.appendChild(sw);
+          });
+
+          card.appendChild(head);
+          card.appendChild(meta);
+          card.appendChild(palRow);
+        }
+        slotsGrid.appendChild(card);
+      });
+
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'add-slot-btn';
+      addBtn.innerHTML = `<span>${t.slotAddNext}</span>`;
+      addBtn.addEventListener('click', () => {
+        slots.push(createSlot(slots.length));
+        renderSlotsUI();
+      });
+      slotsGrid.appendChild(addBtn);
+    }
+
+    function renderPoisUI() {
+      const t = tr();
+      poisGrid.innerHTML = '';
+      pois.forEach((poi, idx) => {
+        const card = document.createElement('div');
+        card.className = 'slot-card';
+
+        const head = document.createElement('div');
+        head.className = 'slot-head';
+
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'slot-name-wrap';
+
+        const dot = document.createElement('span');
+        dot.className = 'slot-dot';
+        dot.style.background = poi.color.hex;
+
+        const nameInp = document.createElement('input');
+        nameInp.type = 'text';
+        nameInp.className = 'slot-name-input';
+        nameInp.value = poi.name;
+        nameInp.placeholder = `POI #${idx + 1}`;
+        nameInp.title = t.tipName;
+        nameInp.addEventListener('input', () => { poi.name = nameInp.value; });
+
+        nameWrap.appendChild(dot);
+        nameWrap.appendChild(nameInp);
+
+        const miniBtns = document.createElement('div');
+        miniBtns.className = 'slot-mini-btns';
+
+        const moveBtn = document.createElement('button');
+        moveBtn.className = 'mini-btn' + (mapPickMode === poi.id ? ' active' : '');
+        moveBtn.textContent = '🎯';
+        moveBtn.title = t.tipMovePoi;
+        moveBtn.disabled = getActiveSlots().length === 0;
+        moveBtn.addEventListener('click', () => {
+          setPickMode(mapPickMode === poi.id ? null : poi.id);
+        });
+
+        const randBtn = document.createElement('button');
+        randBtn.className = 'mini-btn';
+        randBtn.textContent = '🎲';
+        randBtn.title = t.tipRand;
+        randBtn.addEventListener('click', () => {
+          const others = POI_COLORS.filter((c) => c.key !== poi.color.key);
+          poi.color = others[Math.floor(Math.random() * others.length)];
+          renderPoisUI();
+        });
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'mini-btn';
+        delBtn.textContent = '×';
+        delBtn.title = t.tipDelPoi;
+        delBtn.addEventListener('click', () => {
+          if (mapPickMode === poi.id) setPickMode(null);
+          pois = pois.filter((p) => p.id !== poi.id);
+          renderPoisUI();
+        });
+
+        miniBtns.appendChild(moveBtn);
+        miniBtns.appendChild(randBtn);
+        miniBtns.appendChild(delBtn);
+        head.appendChild(nameWrap);
+        head.appendChild(miniBtns);
+
+        const coordRow = document.createElement('div');
+        coordRow.className = 'slot-head';
+
+        const coordInp = document.createElement('input');
+        coordInp.type = 'text';
+        coordInp.className = 'poi-coord-input';
+        coordInp.value = `${poi.lat.toFixed(5)}, ${poi.lon.toFixed(5)}`;
+        coordInp.placeholder = '54.3520, 18.6466';
+        coordInp.title = t.tipCoord;
+        coordInp.addEventListener('change', () => {
+          const parsed = parseCoordsText(coordInp.value);
+          if (parsed) {
+            poi.lat = parsed.lat;
+            poi.lon = parsed.lon;
+            poi.wx = lonToWorldX(parsed.lon);
+            poi.wy = latToWorldY(parsed.lat);
+            coordInp.value = `${poi.lat.toFixed(5)}, ${poi.lon.toFixed(5)}`;
+            syncPoisWithTracks();
+          } else {
+            coordInp.value = `${poi.lat.toFixed(5)}, ${poi.lon.toFixed(5)}`;
+          }
+        });
+
+        const iconSel = document.createElement('select');
+        iconSel.className = 'poi-icon-select';
+        POI_ICON_KEYS.forEach((key) => {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = t.poiIcons[key];
+          if (poi.icon === key) opt.selected = true;
+          iconSel.appendChild(opt);
+        });
+        iconSel.addEventListener('change', () => { poi.icon = iconSel.value; });
+
+        coordRow.appendChild(coordInp);
+        coordRow.appendChild(iconSel);
+
+        const palRow = document.createElement('div');
+        palRow.className = 'palette-row';
+        POI_COLORS.forEach((c) => {
+          const sw = document.createElement('button');
+          sw.type = 'button';
+          sw.className = 'swatch' + (poi.color.key === c.key ? ' active' : '');
+          sw.style.background = c.hex;
+          sw.title = c.name;
+          sw.addEventListener('click', () => {
+            poi.color = c;
+            renderPoisUI();
+          });
+          palRow.appendChild(sw);
+        });
+
+        card.appendChild(head);
+        card.appendChild(coordRow);
+        card.appendChild(palRow);
+        poisGrid.appendChild(card);
+      });
+
+      const addPoiBtn = document.createElement('button');
+      addPoiBtn.type = 'button';
+      addPoiBtn.className = 'add-slot-btn poi-add';
+      addPoiBtn.innerHTML = `<span>${t.poiAddBtn}</span>`;
+      addPoiBtn.addEventListener('click', () => {
+        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
+        addPoiItem({ name: `POI #${pois.length + 1}`, lat, lon });
+      });
+      poisGrid.appendChild(addPoiBtn);
+    }
+
+    function onTracksChanged() {
+      const active = getActiveSlots();
+      renderSlotsUI();
+      renderPoisUI();
+      if (active.length === 0) {
+        setPickMode(null);
+        dropOverlay.classList.remove('hidden');
+        addPoiMapBtn.disabled = true;
+        recordBtn.disabled = true;
+        statusText.textContent = tr().statusInit;
+        if (rafId) cancelAnimationFrame(rafId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+
+      dropOverlay.classList.add('hidden');
+      addPoiMapBtn.disabled = false;
+      recordBtn.disabled = false;
+
+      recomputeGlobalTimeline();
+      startAnimation();
+    }
+
+    async function loadFilesIntoSlots(fileList, specificSlotIdx = null) {
+      const files = [...fileList].filter((f) => f && f.name.toLowerCase().endsWith('.gpx'));
+      if (!files.length) return;
+
+      for (let i = 0; i < files.length; i++) {
+        let targetIdx = specificSlotIdx !== null && i === 0
+          ? specificSlotIdx
+          : slots.findIndex((s) => s.track === null);
+        if (targetIdx === -1) {
+          slots.push(createSlot(slots.length));
+          targetIdx = slots.length - 1;
+        }
+        try {
+          const text = await files[i].text();
+          const parsed = parseSingleGPX(text, files[i].name);
+          slots[targetIdx].track = parsed;
+
+          pois = pois.filter((p) => p.sourceSlot !== targetIdx);
+          for (const w of parsed.importedWpts) {
+            pois.push({
+              id: nextPoiId++,
+              name: w.name,
+              lat: w.lat,
+              lon: w.lon,
+              wx: lonToWorldX(w.lon),
+              wy: latToWorldY(w.lat),
+              color: slots[targetIdx].color,
+              icon: 'pin',
+              sourceSlot: targetIdx,
+              trackMatches: []
+            });
+          }
+        } catch (err) {
+          alert(err.message);
+        }
+      }
+      osmBlockedNotified = false;
+      onTracksChanged();
+    }
+
+    function getMapViewport() {
+      const W = canvas.width;
+      const H = canvas.height;
+      const unitSize = Math.max(W, H);
+      const activeCount = Math.max(1, getActiveSlots().length);
+      const showElev = inShowElev.checked && globalHasElevation;
+      const showLegend = inShowLegend.checked;
+      const isPortrait = H > W;
+
+      let topHudH = 0;
+      if (showLegend && isPortrait) {
+        const cols = activeCount >= 4 ? 2 : 1;
+        const rows = Math.ceil(activeCount / cols);
+        const headerH = Math.round(unitSize * 0.022);
+        const rowH = Math.round(unitSize * 0.021);
+        topHudH = headerH + rows * rowH + 18;
+      }
+
+      const elevH = showElev ? Math.round(H * 0.20) : 0;
+      const mapY = topHudH;
+      const mapW = W;
+      const mapH = Math.max(100, H - topHudH - elevH);
+
+      return { W, H, unitSize, isPortrait, mapX: 0, mapY, mapW, mapH, topHudH, elevH, showElev, showLegend };
+    }
+
+    function getFloatingHudDimensions(W, unitSize, count) {
+      const compact = count > 5;
+      const pad = W * 0.016;
+      const boxW = Math.min(W * 0.45, unitSize * 0.27);
+      const headerH = unitSize * (compact ? 0.020 : 0.024);
+      const rowH = unitSize * (compact ? 0.0195 : 0.025);
+      const boxH = headerH + count * rowH + 10;
+      return { pad, boxW, boxH, headerH, rowH, compact };
+    }
+
+    function computeOverviewCamera() {
+      const active = getActiveSlots();
+      if (!active.length) return;
+
+      let minWx = Infinity, maxWx = -Infinity, minWy = Infinity, maxWy = -Infinity;
+      for (const s of active) {
+        for (const p of s.track.pts) {
+          if (p.wx < minWx) minWx = p.wx;
+          if (p.wx > maxWx) maxWx = p.wx;
+          if (p.wy < minWy) minWy = p.wy;
+          if (p.wy > maxWy) maxWy = p.wy;
+        }
+      }
+
+      const { mapY, mapW, mapH, unitSize, isPortrait, showLegend } = getMapViewport();
+      const spanX = Math.max(1e-5, maxWx - minWx);
+      const spanY = Math.max(1e-5, maxWy - minWy);
+      const midWx = (minWx + maxWx) / 2;
+      const midWy = (minWy + maxWy) / 2;
+      const maxZ = MAP_PROVIDERS[inMapStyle.value].maxZ;
+
+      if (!showLegend) {
+        const zx = Math.log2((mapW * 0.90) / (spanX * 256));
+        const zy = Math.log2((mapH * 0.88) / (spanY * 256));
+        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
+        overviewCam = { wx: midWx, wy: midWy, z };
+        return;
+      }
+
+      if (isPortrait) {
+        const zx = Math.log2((mapW * 0.86) / (spanX * 256));
+        const zy = Math.log2((mapH * 0.84) / (spanY * 256));
+        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
+        overviewCam = { wx: midWx, wy: midWy, z };
+        return;
+      }
+
+      const hud = getFloatingHudDimensions(mapW, unitSize, active.length);
+      const mPad = Math.max(24, mapW * 0.03);
+
+      const areaA = {
+        x0: mPad, x1: mapW - mPad,
+        y0: mapY + hud.pad + hud.boxH + 18, y1: mapY + mapH - mPad
+      };
+      const areaB = {
+        x0: mPad, x1: mapW - hud.pad - hud.boxW - 18,
+        y0: mapY + mPad, y1: mapY + mapH - mPad
+      };
+
+      const fitInArea = (area) => {
+        const aw = Math.max(120, area.x1 - area.x0);
+        const ah = Math.max(120, area.y1 - area.y0);
+        const zx = Math.log2((aw * 0.90) / (spanX * 256));
+        const zy = Math.log2((ah * 0.88) / (spanY * 256));
+        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
+        const pxScale = Math.pow(2, z) * 256;
+        const safeCx = (area.x0 + area.x1) / 2;
+        const safeCy = (area.y0 + area.y1) / 2;
+        const wx = midWx - (safeCx - mapW / 2) / pxScale;
+        const wy = midWy - (safeCy - (mapY + mapH / 2)) / pxScale;
+        return { wx, wy, z };
+      };
+
+      const camA = fitInArea(areaA);
+      const camB = fitInArea(areaB);
+      overviewCam = camA.z >= camB.z ? camA : camB;
+    }
+
+    function requestTile(styleKey, z, tx, ty, isOverlay = false) {
+      const maxTile = 1 << z;
+      if (ty < 0 || ty >= maxTile) return null;
+      const wx = ((tx % maxTile) + maxTile) % maxTile;
+      const key = `${styleKey}${isOverlay ? '_ov' : ''}/${z}/${wx}/${ty}`;
+
+      const existing = tileCache.get(key);
+      if (existing) return existing;
+
+      const provider = MAP_PROVIDERS[styleKey];
+      const urlFn = isOverlay ? provider.overlayUrl : provider.url;
+      if (!urlFn) return null;
+
+      const entry = { img: null, status: 'loading', promise: null };
+      entry.promise = new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.referrerPolicy = 'strict-origin-when-cross-origin';
+        img.onload = () => {
+          if (!isOverlay && styleKey === 'osm' && isOsmBlockedTile(img)) {
+            if (!osmBlockedNotified) {
+              osmBlockedNotified = true;
+              statusText.textContent = tr().statusOsmBlocked;
+            }
+          }
+          entry.img = img;
+          entry.status = 'ok';
+          resolve(entry);
+        };
+        img.onerror = () => { entry.status = 'error'; resolve(entry); };
+        img.src = urlFn(z, wx, ty);
+      });
+
+      tileCache.set(key, entry);
+      return entry;
+    }
+
+    function getVisibleTilesForCamera(cam, mapW, mapH) {
+      const styleKey = inMapStyle.value;
+      const maxZ = MAP_PROVIDERS[styleKey].maxZ;
+      const tileZ = Math.max(2, Math.min(maxZ, Math.round(cam.z)));
+      const nTiles = 1 << tileZ;
+      const pxScale = Math.pow(2, cam.z) * 256;
+
+      const halfWx = (mapW / 2) / pxScale;
+      const halfWy = (mapH / 2) / pxScale;
+      const tx0 = Math.floor((cam.wx - halfWx) * nTiles) - 1;
+      const tx1 = Math.floor((cam.wx + halfWx) * nTiles) + 1;
+      const ty0 = Math.max(0, Math.floor((cam.wy - halfWy) * nTiles) - 1);
+      const ty1 = Math.min(nTiles - 1, Math.floor((cam.wy + halfWy) * nTiles) + 1);
+
+      const list = [];
+      for (let ty = ty0; ty <= ty1; ty++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
+          list.push({ styleKey, tileZ, tx, ty });
+        }
+      }
+      return list;
+    }
+
+    async function preloadTiles() {
+      syncDarkModeVisibility();
+      const active = getActiveSlots();
+      if (!active.length) return [];
+      const provider = MAP_PROVIDERS[inMapStyle.value];
+
+      if (provider.isVector) {
+        const m = ensureDarkModeMap();
+        if (!m) return [];
+        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
+        m.jumpTo({ center: [lon, lat], zoom: Math.max(1, overviewCam.z - 1), animate: false });
+        return new Promise((resolve) => {
+          if (mlReady && m.areTilesLoaded()) { resolve(); return; }
+          m.once('idle', resolve);
+          setTimeout(resolve, 3500);
+        });
+      }
+
+      const { mapW, mapH } = getMapViewport();
+      const promises = [];
+      for (const t of getVisibleTilesForCamera(overviewCam, mapW, mapH)) {
+        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
+        if (entry && entry.status === 'loading') promises.push(entry.promise);
+        if (provider.overlayUrl) {
+          const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
+          if (ov && ov.status === 'loading') promises.push(ov.promise);
+        }
+      }
+      return Promise.all(promises);
+    }
+
+    function easeInOutCubic(x) {
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function getTrackStateAtSimTime(trk, currentSimMs) {
+      const pts = trk.pts;
+      if (currentSimMs <= trk.simStartMs) {
+        return {
+          status: 'waiting',
+          progress: 0,
+          wx: pts[0].wx,
+          wy: pts[0].wy,
+          ele: pts[0].smoothEle ?? 0,
+          km: 0,
+          idx: 0
+        };
+      }
+      if (currentSimMs >= trk.simEndMs) {
+        const last = pts[pts.length - 1];
+        return {
+          status: 'finished',
+          progress: 1,
+          wx: last.wx,
+          wy: last.wy,
+          ele: last.smoothEle ?? 0,
+          km: trk.totalKm,
+          idx: pts.length - 1
+        };
+      }
+
+      const relTarget = currentSimMs - trk.simStartMs;
+      let lo = 0, hi = pts.length - 1;
+      while (lo < hi - 1) {
+        const mid = (lo + hi) >> 1;
+        if (pts[mid].relMs <= relTarget) lo = mid;
+        else hi = mid;
+      }
+      const a = pts[lo], b = pts[hi];
+      const span = (b.relMs - a.relMs) || 1;
+      const f = (relTarget - a.relMs) / span;
+      return {
+        status: 'riding',
+        progress: relTarget / trk.durationMs,
+        wx: a.wx + (b.wx - a.wx) * f,
+        wy: a.wy + (b.wy - a.wy) * f,
+        ele: (a.smoothEle ?? 0) + ((b.smoothEle ?? 0) - (a.smoothEle ?? 0)) * f,
+        km: a.km + (b.km - a.km) * f,
+        idx: hi
+      };
+    }
+
+    function getCameraAtTime(globalT) {
+      const intro = Math.min(1, globalT / 0.15);
+      const outro = Math.max(0, (globalT - 0.88) / 0.12);
+      const zBoost = easeInOutCubic(intro) * 0.06 - easeInOutCubic(outro) * 0.06;
+      return { wx: overviewCam.wx, wy: overviewCam.wy, z: overviewCam.z + zBoost };
+    }
+
+    function getDotAlpha(trackProgress, status) {
+      if (status === 'waiting' || status === 'finished') return 0.50;
+      if (trackProgress <= 0.08) return 0.50;
+      if (trackProgress < 0.18) return lerp(0.50, 1.00, easeInOutCubic((trackProgress - 0.08) / 0.10));
+      if (trackProgress <= 0.82) return 1.00;
+      if (trackProgress < 0.92) return lerp(1.00, 0.50, easeInOutCubic((trackProgress - 0.82) / 0.10));
+      return 0.50;
+    }
+
+    function drawMovingDot(bx, by, unitSize, colorObj, alpha, pulsePhase) {
+      const r = unitSize * 0.0088;
+      const half = dotLayer.width / 2;
+
+      dotCtx.clearRect(0, 0, dotLayer.width, dotLayer.height);
+      dotCtx.save();
+
+      const ringR = r * (1.35 + 0.5 * pulsePhase);
+      dotCtx.beginPath();
+      dotCtx.arc(half, half, ringR, 0, Math.PI * 2);
+      dotCtx.strokeStyle = colorObj.hex;
+      dotCtx.lineWidth = 2;
+      dotCtx.globalAlpha = 0.55 * (1 - pulsePhase);
+      dotCtx.stroke();
+      dotCtx.globalAlpha = 1;
+
+      dotCtx.shadowColor = colorObj.hex;
+      dotCtx.shadowBlur = 12;
+      dotCtx.fillStyle = colorObj.hex;
+      dotCtx.beginPath();
+      dotCtx.arc(half, half, r, 0, Math.PI * 2);
+      dotCtx.fill();
+
+      dotCtx.shadowBlur = 0;
+      dotCtx.lineWidth = 2.4;
+      dotCtx.strokeStyle = '#ffffff';
+      dotCtx.stroke();
+      dotCtx.restore();
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(dotLayer, bx - half, by - half);
+      ctx.restore();
+    }
+
+    function drawFloatingPill(x, y, offsetY, unitSize, mapY, mapW, mapH, borderColor, text, isSubtle = false) {
+      const clean = (text || '').trim();
+      if (!clean) return;
+      const fontSize = Math.max(11, Math.round(unitSize * (isSubtle ? 0.0076 : 0.0082)));
+
+      ctx.save();
+      ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+
+      let shown = clean;
+      const maxW = unitSize * 0.14;
+      while (ctx.measureText(shown).width > maxW && shown.length > 3) {
+        shown = shown.slice(0, -2) + '…';
+      }
+
+      const padX = 7;
+      const pillH = fontSize + 7;
+      const pillW = ctx.measureText(shown).width + padX * 2;
+
+      let lx = x - pillW / 2;
+      lx = Math.max(6, Math.min(mapW - pillW - 6, lx));
+
+      let ly = y - offsetY - pillH;
+      if (ly < mapY + 6) ly = Math.min(mapY + mapH - pillH - 6, y + offsetY);
+
+      ctx.fillStyle = isSubtle ? 'rgba(11, 19, 17, 0.78)' : 'rgba(11, 19, 17, 0.88)';
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.roundRect(lx, ly, pillW, pillH, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(shown, lx + pillW / 2, ly + pillH / 2 + 0.5);
+      ctx.restore();
+    }
+
+    function drawPoiMarker(x, y, unitSize, poi, poiScale = 1) {
+      const r = unitSize * 0.0082 * poiScale;
+      const hex = poi.color.hex;
+      const outline = poi.color.key === 'white' ? '#111827' : '#ffffff';
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = hex;
+      ctx.strokeStyle = outline;
+      ctx.lineWidth = Math.max(1.5, 2 * Math.sqrt(poiScale));
+
+      if (poi.icon === 'diamond') {
+        ctx.beginPath();
+        ctx.moveTo(x, y - r * 1.15);
+        ctx.lineTo(x + r * 1.15, y);
+        ctx.lineTo(x, y + r * 1.15);
+        ctx.lineTo(x - r * 1.15, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+      } else if (poi.icon === 'pin') {
+        const pr = r * 1.05;
+        ctx.beginPath();
+        ctx.arc(x, y - pr * 1.2, pr, Math.PI * 0.8, Math.PI * 0.2, false);
+        ctx.lineTo(x, y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+        ctx.fillStyle = outline;
+        ctx.beginPath();
+        ctx.arc(x, y - pr * 1.2, pr * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (poi.icon === 'flag') {
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.6, 2.4 * Math.sqrt(poiScale));
+        ctx.beginPath();
+        ctx.moveTo(x, y + r * 0.4);
+        ctx.lineTo(x, y - r * 2.1);
+        ctx.stroke();
+
+        ctx.fillStyle = hex;
+        ctx.beginPath();
+        ctx.moveTo(x, y - r * 2.1);
+        ctx.lineTo(x + r * 1.8, y - r * 1.5);
+        ctx.lineTo(x, y - r * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.lineWidth = Math.max(1.2, 1.4 * Math.sqrt(poiScale));
+        ctx.stroke();
+      } else if (poi.icon === 'target') {
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.05, 0, Math.PI * 2);
+        ctx.strokeStyle = hex;
+        ctx.lineWidth = Math.max(1.6, 2.4 * Math.sqrt(poiScale));
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = outline;
+        ctx.lineWidth = Math.max(1.2, 1.4 * Math.sqrt(poiScale));
+        ctx.beginPath();
+        ctx.moveTo(x - r * 1.4, y); ctx.lineTo(x - r * 0.5, y);
+        ctx.moveTo(x + r * 0.5, y); ctx.lineTo(x + r * 1.4, y);
+        ctx.moveTo(x, y - r * 1.4); ctx.lineTo(x, y - r * 0.5);
+        ctx.moveTo(x, y + r * 0.5); ctx.lineTo(x, y + r * 1.4);
+        ctx.stroke();
+        ctx.fillStyle = hex;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawPin(x, y, unitSize, colorHex, label) {
+      const r = unitSize * 0.0068;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = colorHex;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      if (label) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `800 ${Math.round(r * 1.1)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y + 0.5);
+      }
+      ctx.restore();
+    }
+
+    function renderFrame(elapsedMs) {
+      const vp = getMapViewport();
+      const { W, H, unitSize, isPortrait, mapY, mapW, mapH, topHudH, elevH, showElev, showLegend } = vp;
+      const active = getActiveSlots();
+      const dur = getDurationMs();
+      const globalT = Math.min(1, elapsedMs / dur);
+      const rideT = Math.max(0, Math.min(1, (globalT - 0.08) / 0.84));
+      const currentSimMs = globalStartMs + rideT * globalSpanMs;
+      const pulsePhase = (elapsedMs % 1400) / 1400;
+
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#182028';
+      ctx.fillRect(0, 0, W, H);
+
+      if (!active.length) return;
+
+      const cam = getCameraAtTime(globalT);
+      lastCam = cam;
+      const styleKey = inMapStyle.value;
+      const provider = MAP_PROVIDERS[styleKey];
+      const pxScale = Math.pow(2, cam.z) * 256;
+
+      const worldToScreen = (wx, wy) => ({
+        x: mapW / 2 + (wx - cam.wx) * pxScale,
+        y: mapY + mapH / 2 + (wy - cam.wy) * pxScale
+      });
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, mapY, mapW, mapH);
+      ctx.clip();
+
+      if (provider.isVector) {
+        const m = ensureDarkModeMap();
+        if (m) {
+          const [lon, lat] = worldToLonLat(cam.wx, cam.wy);
+          m.jumpTo({ center: [lon, lat], zoom: Math.max(1, cam.z - 1), animate: false });
+          ctx.drawImage(m.getCanvas(), 0, mapY, mapW, mapH);
+        }
+      } else {
+        const tileZ = Math.max(2, Math.min(provider.maxZ, Math.round(cam.z)));
+        const nTiles = 1 << tileZ;
+        const tileScreenSize = Math.pow(2, cam.z - tileZ) * 256;
+        const tiles = getVisibleTilesForCamera(cam, mapW, mapH);
+
+        for (const t of tiles) {
+          const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
+          const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
+          const sy = mapY + mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
+          if (entry && entry.status === 'ok' && entry.img) {
+            ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+            if (provider.overlayUrl) {
+              const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
+              if (ov && ov.status === 'ok' && ov.img) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.globalAlpha = 0.72;
+                ctx.drawImage(ov.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
+                ctx.restore();
+              }
+            }
+          } else {
+            ctx.fillStyle = '#182622';
+            ctx.fillRect(sx, sy, tileScreenSize + 0.5, tileScreenSize + 0.5);
+            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+            ctx.strokeRect(sx, sy, tileScreenSize, tileScreenSize);
+          }
+        }
+      }
+
+      const states = active.map((slot) => ({
+        slot,
+        st: getTrackStateAtSimTime(slot.track, currentSimMs)
+      }));
+
+      for (const { slot, st } of states) {
+        const trk = slot.track;
+        const col = slot.color;
+
+        if (st.progress > 0) {
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.shadowColor = col.hex;
+          ctx.shadowBlur = 10;
+          ctx.strokeStyle = col.hex;
+          ctx.lineWidth = unitSize * 0.0036;
+          ctx.beginPath();
+          const p0 = worldToScreen(trk.pts[0].wx, trk.pts[0].wy);
+          ctx.moveTo(p0.x, p0.y);
+          for (let i = 1; i < st.idx; i++) {
+            const sp = worldToScreen(trk.pts[i].wx, trk.pts[i].wy);
+            ctx.lineTo(sp.x, sp.y);
+          }
+          const curSp = worldToScreen(st.wx, st.wy);
+          ctx.lineTo(curSp.x, curSp.y);
+          ctx.stroke();
+
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = col.core;
+          ctx.lineWidth = unitSize * 0.0012;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        const startSp = worldToScreen(trk.pts[0].wx, trk.pts[0].wy);
+        drawPin(startSp.x, startSp.y, unitSize, col.hex, null);
+
+        if (!trk.isLoop && st.status === 'finished') {
+          const endSp = worldToScreen(trk.pts[trk.pts.length - 1].wx, trk.pts[trk.pts.length - 1].wy);
+          drawPin(endSp.x, endSp.y, unitSize, col.hex, 'M');
+        }
+      }
+
+      const showPois = inShowPoi.checked;
+      const showPoiLabels = inShowPoiLabels.checked;
+      const poiScale = parseFloat(inPoiScale.value) || 1;
+      if (showPois && pois.length > 0) {
+        for (const poi of pois) {
+          const psp = worldToScreen(poi.wx, poi.wy);
+          drawPoiMarker(psp.x, psp.y, unitSize, poi, poiScale);
+          if (showPoiLabels) {
+            const baseOff = (poi.icon === 'pin' || poi.icon === 'flag') ? unitSize * 0.022 : unitSize * 0.013;
+            drawFloatingPill(psp.x, psp.y, baseOff * poiScale, unitSize, mapY, mapW, mapH, poi.color.hex, poi.name, true);
+          }
+        }
+      }
+
+      for (const { slot, st } of states) {
+        const dotSp = worldToScreen(st.wx, st.wy);
+        const alpha = getDotAlpha(st.progress, st.status);
+        drawMovingDot(dotSp.x, dotSp.y, unitSize, slot.color, alpha, pulsePhase);
+      }
+      for (const { slot, st } of states) {
+        const dotSp = worldToScreen(st.wx, st.wy);
+        drawFloatingPill(dotSp.x, dotSp.y, unitSize * 0.014, unitSize, mapY, mapW, mapH, slot.color.hex, slot.track.name, false);
+      }
+
+      ctx.save();
+      ctx.font = `600 ${Math.round(unitSize * 0.0075)}px Inter, system-ui, sans-serif`;
+      const attrW = ctx.measureText(provider.attr).width + 14;
+      ctx.fillStyle = styleKey === 'dark_mode' ? 'rgba(15,23,34,0.78)' : 'rgba(255,255,255,0.78)';
+      ctx.fillRect(mapW - attrW, mapY + mapH - 20, attrW, 20);
+      ctx.fillStyle = styleKey === 'dark_mode' ? '#cbd5e1' : '#111827';
+      ctx.fillText(provider.attr, mapW - attrW + 7, mapY + mapH - 6);
+      ctx.restore();
+
+      ctx.restore();
+
+      if (showElev && elevH > 0) {
+        const py0 = mapY + mapH;
+        ctx.save();
+        ctx.fillStyle = '#0d1714';
+        ctx.fillRect(0, py0, W, elevH);
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, py0);
+        ctx.lineTo(W, py0);
+        ctx.stroke();
+
+        const padL = W * 0.055;
+        const padR = W * 0.025;
+        const padT = elevH * 0.16;
+        const padB = elevH * 0.18;
+        const plotW = W - padL - padR;
+        const plotH = elevH - padT - padB;
+        const plotY0 = py0 + padT;
+        const plotY1 = py0 + padT + plotH;
+
+        const step = Math.max(10, Math.ceil((globalMaxEle - globalMinEle) / 4 / 25) * 25);
+        const yMinTick = Math.max(0, Math.floor(globalMinEle / step) * step);
+        const yMaxTick = Math.max(yMinTick + step, Math.ceil(globalMaxEle / step) * step);
+
+        const eleToY = (e) => plotY1 - ((e - yMinTick) / (yMaxTick - yMinTick)) * plotH;
+        const kmToX = (km) => padL + (km / globalMaxKm) * plotW;
+
+        ctx.font = `600 ${Math.round(unitSize * 0.0072)}px Inter, system-ui, sans-serif`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (let v = yMinTick; v <= yMaxTick; v += step) {
+          const gy = eleToY(v);
+          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          ctx.beginPath();
+          ctx.moveTo(padL, gy);
+          ctx.lineTo(W - padR, gy);
+          ctx.stroke();
+          ctx.fillStyle = '#94a8a0';
+          ctx.fillText(`${v}m`, padL - 8, gy);
+        }
+
+        for (const { slot, st } of states) {
+          const trk = slot.track;
+          if (!trk.hasEle || st.progress <= 0) continue;
+          const col = slot.color;
+          const curX = kmToX(st.km);
+          const curY = eleToY(st.ele);
+
+          const grad = ctx.createLinearGradient(0, plotY0, 0, plotY1);
+          grad.addColorStop(0, `${col.hex}42`);
+          grad.addColorStop(1, `${col.hex}08`);
+
+          ctx.beginPath();
+          ctx.moveTo(kmToX(0), plotY1);
+          for (let i = 0; i < st.idx; i++) {
+            ctx.lineTo(kmToX(trk.pts[i].km), eleToY(trk.pts[i].smoothEle));
+          }
+          ctx.lineTo(curX, curY);
+          ctx.lineTo(curX, plotY1);
+          ctx.closePath();
+          ctx.fillStyle = grad;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.moveTo(kmToX(0), eleToY(trk.pts[0].smoothEle));
+          for (let i = 1; i < st.idx; i++) {
+            ctx.lineTo(kmToX(trk.pts[i].km), eleToY(trk.pts[i].smoothEle));
+          }
+          ctx.lineTo(curX, curY);
+          ctx.strokeStyle = col.hex;
+          ctx.lineWidth = 2.6;
+          ctx.stroke();
+
+          ctx.fillStyle = col.hex;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(curX, curY, 4.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        if (showPois && inShowPoiOnElev.checked && pois.length > 0) {
+          const elevDotR = 4.5 * Math.min(1.6, Math.max(0.7, poiScale));
+          for (const poi of pois) {
+            for (const m of poi.trackMatches) {
+              const found = states.find((s) => s.slot === m.slot);
+              if (!found || found.st.km < m.km) continue;
+              const px = kmToX(m.km);
+              const py = eleToY(m.ele);
+
+              ctx.save();
+              ctx.strokeStyle = `${poi.color.hex}88`;
+              ctx.lineWidth = 1.4;
+              ctx.setLineDash([3, 3]);
+              ctx.beginPath();
+              ctx.moveTo(px, plotY0);
+              ctx.lineTo(px, py);
+              ctx.stroke();
+              ctx.setLineDash([]);
+
+              ctx.fillStyle = poi.color.hex;
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.8;
+              ctx.beginPath();
+              ctx.arc(px, py, elevDotR, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+
+              if (showPoiLabels) {
+                const lbl = (poi.name || '').trim().slice(0, 14);
+                if (lbl) {
+                  ctx.font = `700 ${Math.max(9, Math.round(unitSize * 0.0062))}px Inter, system-ui, sans-serif`;
+                  ctx.fillStyle = '#e2e8f0';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'bottom';
+                  ctx.fillText(lbl, px, plotY0 - 2);
+                }
+              }
+              ctx.restore();
+            }
+          }
+        }
+
+        ctx.fillStyle = '#94a8a0';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let k = 0; k <= 4; k++) {
+          const frac = k / 4;
+          const kmVal = frac * globalMaxKm;
+          ctx.fillText(`${kmVal.toFixed(globalMaxKm >= 20 ? 0 : 1)} km`, kmToX(kmVal), plotY1 + 6);
+        }
+
+        ctx.restore();
+      }
+
+      if (showLegend) {
+        if (isPortrait) {
+          drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states);
+        } else {
+          drawMultiHUD(W, unitSize, globalT, currentSimMs, states);
+        }
+      }
+    }
+
+    function drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states) {
+      const t = tr();
+      const cols = states.length >= 4 ? 2 : 1;
+      const headerH = Math.round(unitSize * 0.022);
+      const rowH = Math.round(unitSize * 0.021);
+      const colW = (W - 36) / cols;
+
+      ctx.save();
+      ctx.fillStyle = '#0d1714';
+      ctx.fillRect(0, 0, W, topHudH);
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, topHudH);
+      ctx.lineTo(W, topHudH);
+      ctx.stroke();
+
+      let clockTxt = '';
+      if (useClockLabels === 'epoch') clockTxt = `${t.hudHour}: ${formatClockHHMM(currentSimMs)}`;
+      else if (useClockLabels === 'timeOfDay') clockTxt = `${t.hudHour}: ${formatMsOfDayHHMM(currentSimMs)}`;
+      else clockTxt = `${t.hudElapsed}: ${formatClockHHMM(currentSimMs - globalStartMs, true)}`;
+
+      ctx.fillStyle = '#94a8a0';
+      ctx.font = `700 ${Math.round(unitSize * 0.0085)}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(clockTxt, 18, headerH * 0.65);
+
+      const fontSize = Math.round(unitSize * 0.0082);
+      states.forEach(({ slot, st }, idx) => {
+        const colIdx = idx % cols;
+        const rowIdx = Math.floor(idx / cols);
+        const rx = 18 + colIdx * colW;
+        const ry = headerH + rowIdx * rowH + rowH * 0.55;
+        const trk = slot.track;
+
+        ctx.fillStyle = slot.color.hex;
+        ctx.beginPath();
+        ctx.arc(rx + 6, ry, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        const eleTxt = trk.hasEle ? ` • ${Math.round(st.ele)}m` : '';
+        const statusTag = st.status === 'finished' ? ' ✓' : '';
+        const rightStr = `${st.km.toFixed(1)}/${trk.totalKm.toFixed(1)} km${eleTxt}${statusTag}`;
+
+        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+        const rightW = ctx.measureText(rightStr).width;
+        const maxNameW = colW - rightW - 34;
+
+        let nm = (trk.name || `Track #${idx + 1}`).trim();
+        while (ctx.measureText(nm).width > maxNameW && nm.length > 3) {
+          nm = nm.slice(0, -2) + '…';
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText(nm, rx + 18, ry);
+
+        ctx.fillStyle = st.status === 'finished' ? '#4ade80' : '#cbd5e1';
+        ctx.textAlign = 'right';
+        ctx.fillText(rightStr, rx + colW - 10, ry);
+      });
+
+      ctx.restore();
+    }
+
+    function drawMultiHUD(W, unitSize, globalT, currentSimMs, states) {
+      const t = tr();
+      const { pad, boxW, boxH, headerH, rowH, compact } = getFloatingHudDimensions(W, unitSize, states.length);
+      const bx = W - boxW - pad;
+      const by = pad;
+
+      const alpha = Math.min(1, globalT / 0.08);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ctx.fillStyle = 'rgba(13, 25, 21, 0.88)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, boxW, boxH, 13);
+      ctx.fill();
+      ctx.stroke();
+
+      let clockTxt = '';
+      if (useClockLabels === 'epoch') clockTxt = `${t.hudHour}: ${formatClockHHMM(currentSimMs)}`;
+      else if (useClockLabels === 'timeOfDay') clockTxt = `${t.hudHour}: ${formatMsOfDayHHMM(currentSimMs)}`;
+      else clockTxt = `${t.hudElapsed}: ${formatClockHHMM(currentSimMs - globalStartMs, true)}`;
+
+      ctx.fillStyle = '#94a8a0';
+      ctx.font = `700 ${Math.round(unitSize * (compact ? 0.0078 : 0.0085))}px Inter, system-ui, sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(clockTxt, bx + 13, by + headerH * 0.62);
+
+      const fontSize = Math.round(unitSize * (compact ? 0.0078 : 0.009));
+      states.forEach(({ slot, st }, idx) => {
+        const ry = by + headerH + idx * rowH + rowH * 0.5;
+        const trk = slot.track;
+
+        ctx.fillStyle = slot.color.hex;
+        ctx.beginPath();
+        ctx.arc(bx + 17, ry, compact ? 4 : 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+        const maxNameW = boxW * 0.43;
+        let nm = (trk.name || `Track #${idx + 1}`).trim();
+        while (ctx.measureText(nm).width > maxNameW && nm.length > 3) {
+          nm = nm.slice(0, -2) + '…';
+        }
+        ctx.textAlign = 'left';
+        ctx.fillText(nm, bx + 28, ry);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = st.status === 'finished' ? '#4ade80' : '#e2e8f0';
+        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+        const eleTxt = trk.hasEle ? ` • ${Math.round(st.ele)}m` : '';
+        const statusTag = st.status === 'waiting' ? t.hudWait : (st.status === 'finished' ? ' ✓' : '');
+        ctx.fillText(`${st.km.toFixed(1)}/${trk.totalKm.toFixed(1)} km${eleTxt}${statusTag}`, bx + boxW - 13, ry);
+      });
+
+      ctx.restore();
+    }
+
+    function updateStatusLine() {
+      const active = getActiveSlots();
+      const t = tr();
+      if (!active.length) {
+        statusText.textContent = t.statusInit;
+        return;
+      }
+      const poiTxt = pois.length ? ` • ${pois.length} POI` : '';
+      statusText.textContent = t.statusLoaded(active.length, poiTxt, globalMaxKm.toFixed(1));
+    }
+
+    function loop(ts) {
+      if (!startTime) startTime = ts;
+      const dur = getDurationMs();
+      const elapsed = isRecording
+        ? Math.min(dur, ts - startTime)
+        : (ts - startTime) % (dur + 1200);
+      renderFrame(Math.min(elapsed, dur));
+      rafId = requestAnimationFrame(loop);
+    }
+
+    function startAnimation() {
+      if (rafId) cancelAnimationFrame(rafId);
+      startTime = null;
+      rafId = requestAnimationFrame(loop);
+    }
+
+    canvas.addEventListener('click', (e) => {
+      if (!mapPickMode || !getActiveSlots().length) return;
+      const rect = canvas.getBoundingClientRect();
+      const cx = ((e.clientX - rect.left) / rect.width) * canvas.width;
+      const cy = ((e.clientY - rect.top) / rect.height) * canvas.height;
+      const { mapY, mapW, mapH } = getMapViewport();
+      if (cx < 0 || cx > mapW || cy < mapY || cy > mapY + mapH) return;
+
+      const pxScale = Math.pow(2, lastCam.z) * 256;
+      const wx = lastCam.wx + (cx - mapW / 2) / pxScale;
+      const wy = lastCam.wy + (cy - (mapY + mapH / 2)) / pxScale;
+      const [lon, lat] = worldToLonLat(wx, wy);
+
+      if (mapPickMode === 'add') {
+        addPoiItem({ name: `POI #${pois.length + 1}`, lat, lon });
+        updateStatusLine();
+      } else if (typeof mapPickMode === 'number') {
+        const poi = pois.find((p) => p.id === mapPickMode);
+        if (poi) {
+          poi.lat = lat;
+          poi.lon = lon;
+          poi.wx = wx;
+          poi.wy = wy;
+          syncPoisWithTracks();
+        }
+        setPickMode(null);
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && mapPickMode !== null) setPickMode(null);
+    });
+
+    addPoiMapBtn.addEventListener('click', () => {
+      if (!getActiveSlots().length) return;
+      setPickMode(mapPickMode === 'add' ? null : 'add');
+    });
+
+    inPoiScale.addEventListener('input', () => {
+      const pct = Math.round((parseFloat(inPoiScale.value) || 1) * 100);
+      poiScaleVal.textContent = `${pct}%`;
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length) loadFilesIntoSlots(e.target.files, null);
+      fileInput.value = '';
+    });
+
+    slotFileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) loadFilesIntoSlots([e.target.files[0]], pendingSlotIndex);
+    });
+
+    dropOverlay.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => e.preventDefault());
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.dataTransfer.files.length) loadFilesIntoSlots(e.dataTransfer.files, null);
+    });
+
+    inTimeSync.addEventListener('change', () => {
+      if (getActiveSlots().length) {
+        recomputeGlobalTimeline();
+        startAnimation();
+      }
+    });
+
+    inShowElev.addEventListener('change', () => {
+      if (getActiveSlots().length) {
+        computeOverviewCamera();
+        preloadTiles();
+        startAnimation();
+      } else {
+        syncDarkModeVisibility();
+      }
+    });
+
+    inShowLegend.addEventListener('change', () => {
+      if (getActiveSlots().length) {
+        computeOverviewCamera();
+        preloadTiles();
+        startAnimation();
+      } else {
+        syncDarkModeVisibility();
+      }
+    });
+
+    inAspect.addEventListener('change', () => {
+      const [w, h] = inAspect.value.split('x').map(Number);
+      canvas.width = w;
+      canvas.height = h;
+      if (getActiveSlots().length) {
+        computeOverviewCamera();
+        preloadTiles();
+        startAnimation();
+      }
+    });
+
+    inMapStyle.addEventListener('change', () => {
+      osmBlockedNotified = false;
+      if (getActiveSlots().length) {
+        computeOverviewCamera();
+        preloadTiles();
+        updateStatusLine();
+      } else {
+        syncDarkModeVisibility();
+      }
+    });
+
+    inDuration.addEventListener('change', () => {
+      const v = parseFloat(inDuration.value);
+      if (isNaN(v) || v < 1) inDuration.value = 1;
+      if (getActiveSlots().length) startAnimation();
+    });
+
+    recordBtn.addEventListener('click', async () => {
+      if (!getActiveSlots().length || isRecording) return;
+      setPickMode(null);
+
+      const t = tr();
+      isRecording = true;
+      recordBtn.disabled = true;
+      recordBtn.textContent = t.recFetch;
+      statusText.textContent = t.recPrep;
+
+      await Promise.race([
+        preloadTiles(),
+        new Promise((res) => setTimeout(res, 3500))
+      ]);
+
+      const dur = getDurationMs();
+      const mimeCandidates = [
+        'video/mp4;codecs=avc1',
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm'
+      ];
+      const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+      const stream = canvas.captureStream(60);
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 7000000 } : {});
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        isRecording = false;
+        const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `gpx-animation.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        recordBtn.disabled = false;
+        recordBtn.textContent = tr().btnGenerate;
+        updateStatusLine();
+        startAnimation();
+      };
+
+      startAnimation();
+      recorder.start();
+
+      const t0 = performance.now();
+      const progressTimer = setInterval(() => {
+        const pct = Math.min(100, Math.round(((performance.now() - t0) / dur) * 100));
+        recordBtn.textContent = tr().recProg(pct);
+        statusText.textContent = tr().recStatus(pct);
+      }, 200);
+
+      setTimeout(() => {
+        clearInterval(progressTimer);
+        if (recorder.state === 'recording') recorder.stop();
+      }, dur + 500);
+    });
+
+    applyLanguage(currentLang);
+  </script>
+</body>
+</html>
