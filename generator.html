@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <title>Generator GPX Reel</title>
+  <title>GPX Alive – GPX to Video Animation Maker</title>
+  <meta name="description" content="Free GPX to video animation maker. Upload one or many GPX tracks, add POIs and export 60 FPS videos for Reels, Shorts and YouTube. Runs in your browser." />
+  <link rel="icon" type="image/svg+xml" href="./logo.svg" />
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     :root {
@@ -50,11 +52,15 @@
     .title strong { font-size: 16px; }
     .status { font-size: 12px; color: var(--muted); }
 
-    .controls, .inputs {
+    .controls, .inputs, .action-footer {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       align-items: center;
+    }
+    .action-footer {
+      padding-top: 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
     .lang-switch {
@@ -156,6 +162,8 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
+      padding: 8px 10px;
+      text-align: center;
       transition: background 0.15s ease, transform 0.12s ease;
     }
     .add-slot-btn.poi-add {
@@ -164,14 +172,26 @@
       border-color: rgba(56, 189, 248, 0.45);
       color: #7dd3fc;
     }
-    .add-slot-btn.poi-add:hover {
+    .add-slot-btn.poi-add:hover:not(:disabled) {
       background: rgba(56, 189, 248, 0.2);
       color: #ffffff;
+    }
+    .add-slot-btn.active-mode {
+      background: #0284c7;
+      border-style: solid;
+      border-color: #38bdf8;
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
     }
     .add-slot-btn:hover:not(:disabled) {
       background: rgba(249, 115, 22, 0.22);
       color: #ffffff;
       transform: translateY(-1px);
+    }
+    .add-slot-btn:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+      transform: none;
     }
 
     .slot-head {
@@ -323,24 +343,23 @@
     }
     label.field select option { background: #13201c; color: var(--text); }
 
-    button.action, .file-btn {
+    button.action {
       appearance: none;
       border: 1px solid rgba(255, 255, 255, 0.14);
       background: #1d302a;
       color: var(--text);
-      padding: 8px 13px;
+      padding: 9px 15px;
       border-radius: 10px;
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       transition: transform 0.12s ease, background 0.15s ease;
     }
-    button.action:hover:not(:disabled), .file-btn:hover { background: #264038; transform: translateY(-1px); }
+    button.action:hover:not(:disabled) { background: #264038; transform: translateY(-1px); }
     button.action.active-mode {
       background: #0284c7;
       border-color: #38bdf8;
       color: #ffffff;
-      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
     }
     button.primary {
       background: linear-gradient(135deg, #f97316, #ea580c);
@@ -359,7 +378,7 @@
       background: #ffdd00;
       border: 1px solid #fde047;
       color: #111827;
-      padding: 8px 13px;
+      padding: 9px 14px;
       border-radius: 10px;
       font-size: 13px;
       font-weight: 700;
@@ -433,6 +452,20 @@
       width: 1600px;
       height: 720px;
     }
+
+    footer {
+      width: 100%;
+      max-width: 1260px;
+      text-align: center;
+      font-size: 12.5px;
+      color: var(--muted);
+      padding: 6px 0 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+    footer a { color: var(--text); text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -440,87 +473,96 @@
   <div class="toolbar">
     <div class="row">
       <div class="title">
-        <strong data-i18n="appTitle">Generator Animacji tras GPX by Radzio</strong>
-        <span class="status" id="statusText">Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.</span>
+        <strong data-i18n="appTitle">GPX Alive – GPX to Video Animation Maker</strong>
+        <span class="status" id="statusText">Step 1: Upload a .gpx file or click "Add another GPX" to add more slots.</span>
       </div>
       <div class="controls">
         <div class="lang-switch" role="group" aria-label="Language">
-          <button type="button" class="lang-btn active" data-lang="pl">PL</button>
-          <button type="button" class="lang-btn" data-lang="en">EN</button>
+          <button type="button" class="lang-btn active" data-lang="en">EN</button>
+          <button type="button" class="lang-btn" data-lang="pl">PL</button>
         </div>
-        <label class="file-btn" for="fileInput" data-i18n="btnAddGpx">1. Dodaj GPX</label>
         <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple />
         <input id="slotFileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
-
-        <button class="action" id="addPoiMapBtn" disabled data-i18n="btnAddPoiMap">📍 Dodaj POI</button>
-        <button class="action primary" id="recordBtn" disabled data-i18n="btnGenerate">2. Generuj video</button>
-        <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="coffee-btn" data-i18n="btnCoffee">☕ Podoba się? Możesz kupić mi kawę :)</a>
       </div>
     </div>
 
+    <!-- Wiersz 1 ustawień: mapa, format, czas -->
     <div class="row">
       <div class="inputs">
-        <label class="field"><span data-i18n="lblMap">Mapa:</span>
+        <label class="field"><span data-i18n="lblMap">Map:</span>
           <select id="inMapStyle">
             <option value="osm" selected>OpenStreetMap</option>
             <option value="dark_mode">Dark Mode</option>
             <option value="topo_relief">Topo 3D (Relief)</option>
-            <option value="cyclosm" data-i18n="optCyclosm">CyclOSM (Rowerowa)</option>
+            <option value="cyclosm" data-i18n="optCyclosm">CyclOSM (Cycling)</option>
             <option value="opentopo">OpenTopoMap</option>
             <option value="esri_topo">Topo (ArcGIS)</option>
-            <option value="esri_street" data-i18n="optStreets">Uliczna (ArcGIS)</option>
-            <option value="esri_sat" data-i18n="optSat">Satelita (Esri)</option>
+            <option value="esri_street" data-i18n="optStreets">Streets (ArcGIS)</option>
+            <option value="esri_sat" data-i18n="optSat">Satellite (Esri)</option>
           </select>
         </label>
-        <label class="field"><span data-i18n="lblFormat">Format:</span>
+        <label class="field"><span data-i18n="lblFormat">Aspect:</span>
           <select id="inAspect">
-            <option value="1600x900" selected data-i18n="optLand">16:9 (Poziom)</option>
+            <option value="1600x900" selected data-i18n="optLand">16:9 (Landscape)</option>
             <option value="1080x1920" data-i18n="optPort">9:16 (Reels / Shorts)</option>
-            <option value="1080x1080" data-i18n="optSq">1:1 (Kwadrat)</option>
+            <option value="1080x1080" data-i18n="optSq">1:1 (Square)</option>
           </select>
         </label>
-        <label class="field"><span data-i18n="lblTimeSync">Czas jazdy:</span>
+        <label class="field"><span data-i18n="lblTimeSync">Ride timing:</span>
           <select id="inTimeSync">
-            <option value="clock" selected data-i18n="optClock">Wg godziny (start/koniec z GPX)</option>
-            <option value="relative" data-i18n="optRel">Wspólny start (00:00)</option>
+            <option value="clock" selected data-i18n="optClock">By clock (GPX start/end)</option>
+            <option value="relative" data-i18n="optRel">Simultaneous start (00:00)</option>
           </select>
         </label>
-        <label class="field"><span data-i18n="lblDur">Czas (s):</span>
+        <label class="field"><span data-i18n="lblDur">Duration (s):</span>
           <input id="inDuration" type="number" min="1" max="300" step="1" value="9" />
         </label>
+      </div>
+    </div>
+
+    <!-- Wiersz 2 ustawień: wszystkie checkboxy widoczności w jednym wierszu na desktopie -->
+    <div class="row">
+      <div class="inputs">
         <label class="field">
           <input id="inShowElev" type="checkbox" checked />
-          <span data-i18n="lblElev">Wykres wysokości</span>
+          <span data-i18n="lblElev">Elevation chart</span>
         </label>
         <label class="field">
           <input id="inShowLegend" type="checkbox" checked />
-          <span data-i18n="lblLegend">Legenda</span>
+          <span data-i18n="lblLegend">Legend</span>
         </label>
         <label class="field">
           <input id="inShowPoi" type="checkbox" checked />
-          <span data-i18n="lblPois">Punkty POI</span>
+          <span data-i18n="lblPois">POI markers</span>
         </label>
         <label class="field">
           <input id="inShowPoiLabels" type="checkbox" checked />
-          <span data-i18n="lblPoiLabels">Etykiety POI</span>
+          <span data-i18n="lblPoiLabels">POI labels</span>
         </label>
         <label class="field">
-          <span data-i18n="lblPoiSize">Rozmiar POI:</span>
+          <span data-i18n="lblPoiSize">POI size:</span>
           <input id="inPoiScale" type="range" min="0.4" max="2.5" step="0.1" value="1" />
           <span id="poiScaleVal" style="color: var(--text); font-weight: 700; min-width: 34px;">100%</span>
         </label>
         <label class="field">
           <input id="inShowPoiOnElev" type="checkbox" checked />
-          <span data-i18n="lblPoiOnElev">POI na wykresie</span>
+          <span data-i18n="lblPoiOnElev">POI on chart</span>
         </label>
       </div>
     </div>
 
-    <div class="section-label"><span data-i18n="secTracks">Trasy GPX</span></div>
+    <div class="section-label"><span data-i18n="secTracks">GPX Tracks</span></div>
     <div class="slots-grid" id="slotsGrid"></div>
 
-    <div class="section-label"><span data-i18n="secPois">Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „Dodaj POI” poniżej)</span></div>
+    <div class="section-label"><span data-i18n="secPois">POI Markers</span></div>
     <div class="pois-grid" id="poisGrid"></div>
+
+    <!-- Pasek akcji po sekcji z POI -->
+    <div class="action-footer">
+      <button class="action" id="pauseBtn" disabled data-i18n="btnPause">⏸ Pause</button>
+      <button class="action primary" id="recordBtn" disabled data-i18n="btnGenerate">Generate video</button>
+      <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="coffee-btn" data-i18n="btnCoffee">☕ Like it? You can buy me a coffee :)</a>
+    </div>
   </div>
 
   <div class="stage-wrap" id="dropZone">
@@ -528,11 +570,19 @@
     <canvas id="canvas" width="1600" height="900"></canvas>
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
-        <h2 data-i18n="dropTitle">1. Wrzuć pliki .gpx</h2>
-        <p data-i18n-html="dropSub">Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.</p>
+        <h2 data-i18n="dropTitle">1. Drop .gpx files</h2>
+        <p data-i18n-html="dropSub">Drag &amp; drop <b>.gpx</b> files here or add more fields with <b>Add another GPX</b>.<br>You can also add custom <b>POI</b> markers by clicking on the map or entering coordinates.</p>
       </div>
     </div>
   </div>
+
+  <footer>
+    <span data-i18n="footerTxt">© GPX Alive, created by Radek Piotrowski</span>
+    <span>•</span>
+    <a href="./index.html" data-i18n="footerHome">Home</a>
+    <span>•</span>
+    <span>© OpenStreetMap contributors, OpenTopoMap, CyclOSM, Esri</span>
+  </footer>
 
   <script>
     const canvas = document.getElementById('canvas');
@@ -546,7 +596,7 @@
     const slotsGrid = document.getElementById('slotsGrid');
     const poisGrid = document.getElementById('poisGrid');
 
-    const addPoiMapBtn = document.getElementById('addPoiMapBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
     const recordBtn = document.getElementById('recordBtn');
     const statusText = document.getElementById('statusText');
 
@@ -563,66 +613,13 @@
     const inShowPoiOnElev = document.getElementById('inShowPoiOnElev');
 
     const I18N = {
-      pl: {
-        docTitle: 'Generator Animacji tras GPX by Radzio',
-        appTitle: 'Generator Animacji tras GPX by Radzio',
-        btnAddGpx: '1. Dodaj GPX',
-        btnAddPoiMap: '📍 Dodaj POI',
-        btnGenerate: '2. Generuj video',
-        btnCoffee: '☕ Podoba się? Możesz kupić mi kawę :)',
-        lblMap: 'Mapa:',
-        optCyclosm: 'CyclOSM (Rowerowa)',
-        optStreets: 'Uliczna (ArcGIS)',
-        optSat: 'Satelita (Esri)',
-        lblFormat: 'Format:',
-        optLand: '16:9 (Poziom)',
-        optPort: '9:16 (Reels / Shorts)',
-        optSq: '1:1 (Kwadrat)',
-        lblTimeSync: 'Czas jazdy:',
-        optClock: 'Wg godziny (start/koniec z GPX)',
-        optRel: 'Wspólny start (00:00)',
-        lblDur: 'Czas (s):',
-        lblElev: 'Wykres wysokości',
-        lblLegend: 'Legenda',
-        lblPois: 'Punkty POI',
-        lblPoiLabels: 'Etykiety POI',
-        lblPoiSize: 'Rozmiar POI:',
-        lblPoiOnElev: 'POI na wykresie',
-        secTracks: 'Trasy GPX',
-        secPois: 'Punkty POI (kliknij „📍 Dodaj POI” na mapie lub „Dodaj POI” poniżej)',
-        dropTitle: '1. Wrzuć pliki .gpx',
-        dropSub: 'Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.',
-        statusInit: 'Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.',
-        statusLoaded: (n, poiTxt, maxKm) => `Załadowano ${n} tras${poiTxt} • Najdłuższa: ${maxKm} km - kliknij „2. Generuj video”.`,
-        statusPickAdd: 'Tryb dodawania POI: kliknij wybrane miejsce na mapie (Esc lub kliknij „📍 Dodaj POI”, aby zakończyć).',
-        statusPickMove: 'Kliknij na mapę, aby przenieść wybrany punkt POI w nowe miejsce (Esc = anuluj).',
-        statusOsmBlocked: 'Podgląd lokalny bez nagłówka Referer (OSM 403) - na GitHub Pages OpenStreetMap zadziała, a lokalnie możesz wybrać Dark Mode lub Topo.',
-        slotAddN: (n) => `Dodaj GPX #${n}`,
-        slotAddNext: 'Dodaj kolejny GPX',
-        poiAddBtn: 'Dodaj POI (lub wpisz lat, lon)',
-        poiIcons: { diamond: '◆ Romb', pin: '📍 Pinezka', flag: '⚑ Flaga', target: '⌖ Cel', dot: '● Kropka' },
-        hudHour: 'Godzina',
-        hudElapsed: 'Czas',
-        hudWait: ' (czeka)',
-        recFetch: 'Pobieranie kafelków mapy...',
-        recPrep: 'Przygotowywanie kafelków mapy przed nagraniem...',
-        recProg: (p) => `Nagrywanie ${p}%...`,
-        recStatus: (p) => `Trwa generowanie pliku wideo (${p}%)...`,
-        tipRev: 'Odwróć ten track',
-        tipRand: 'Losowy kolor',
-        tipDelGpx: 'Usuń ten plik GPX',
-        tipDelSlot: 'Usuń ten pusty slot',
-        tipMovePoi: 'Kliknij na mapę, aby przenieść ten POI',
-        tipDelPoi: 'Usuń punkt POI',
-        tipName: 'Wpisz własną nazwę (widoczną w legendzie i przy kropce)',
-        tipCoord: 'Wklej współrzędne (lat, lon) np. z Google Maps'
-      },
       en: {
-        docTitle: 'GPX Route Animation Generator by Radzio',
-        appTitle: 'GPX Route Animation Generator by Radzio',
-        btnAddGpx: '1. Add GPX',
-        btnAddPoiMap: '📍 Add POI',
-        btnGenerate: '2. Generate video',
+        docTitle: 'GPX Alive – GPX to Video Animation Maker',
+        appTitle: 'GPX Alive – GPX to Video Animation Maker',
+        btnAddPoiMap: '📍 Add POI by clicking map',
+        btnPause: '⏸ Pause',
+        btnResume: '▶ Resume',
+        btnGenerate: 'Generate video',
         btnCoffee: '☕ Like it? You can buy me a coffee :)',
         lblMap: 'Map:',
         optCyclosm: 'CyclOSM (Cycling)',
@@ -643,12 +640,12 @@
         lblPoiSize: 'POI size:',
         lblPoiOnElev: 'POI on chart',
         secTracks: 'GPX Tracks',
-        secPois: 'POI Markers (click "📍 Add POI" on map or "Add POI" below)',
+        secPois: 'POI Markers',
         dropTitle: '1. Drop .gpx files',
         dropSub: 'Drag & drop <b>.gpx</b> files here or add more fields with <b>Add another GPX</b>.<br>You can also add custom <b>POI</b> markers by clicking on the map or entering coordinates.',
         statusInit: 'Step 1: Upload a .gpx file or click "Add another GPX" to add more slots.',
-        statusLoaded: (n, poiTxt, maxKm) => `Loaded ${n} track(s)${poiTxt} • Longest: ${maxKm} km - click "2. Generate video".`,
-        statusPickAdd: 'Add POI mode: click anywhere on the map (press Esc or click "📍 Add POI" to finish).',
+        statusLoaded: (n, poiTxt, maxKm) => `Loaded ${n} track(s)${poiTxt} • Longest: ${maxKm} km - click "Generate video".`,
+        statusPickAdd: 'Add POI mode: click anywhere on the map (press Esc or click "📍 Add POI by clicking map" to finish).',
         statusPickMove: 'Click on the map to move the selected POI marker (Esc = cancel).',
         statusOsmBlocked: 'Local preview without Referer header (OSM 403) - OpenStreetMap works on GitHub Pages; locally choose Dark Mode or Topo.',
         slotAddN: (n) => `Add GPX #${n}`,
@@ -669,29 +666,90 @@
         tipMovePoi: 'Click on the map to move this POI',
         tipDelPoi: 'Delete POI marker',
         tipName: 'Enter custom name (shown in legend and next to the dot)',
-        tipCoord: 'Paste coordinates (lat, lon) e.g. from Google Maps'
+        tipCoord: 'Paste coordinates (lat, lon) e.g. from Google Maps',
+        footerTxt: '© GPX Alive, created by Radek Piotrowski',
+        footerHome: 'Home'
+      },
+      pl: {
+        docTitle: 'GPX Alive – zamień ślad GPX w wideo',
+        appTitle: 'GPX Alive – zamień ślad GPX w wideo',
+        btnAddPoiMap: '📍 Dodaj POI klikając na mapie',
+        btnPause: '⏸ Pauza',
+        btnResume: '▶ Wznów',
+        btnGenerate: 'Generuj video',
+        btnCoffee: '☕ Podoba się? Możesz kupić mi kawę :)',
+        lblMap: 'Mapa:',
+        optCyclosm: 'CyclOSM (Rowerowa)',
+        optStreets: 'Uliczna (ArcGIS)',
+        optSat: 'Satelita (Esri)',
+        lblFormat: 'Format:',
+        optLand: '16:9 (Poziom)',
+        optPort: '9:16 (Reels / Shorts)',
+        optSq: '1:1 (Kwadrat)',
+        lblTimeSync: 'Czas jazdy:',
+        optClock: 'Wg godziny (start/koniec z GPX)',
+        optRel: 'Wspólny start (00:00)',
+        lblDur: 'Czas (s):',
+        lblElev: 'Wykres wysokości',
+        lblLegend: 'Legenda',
+        lblPois: 'Punkty POI',
+        lblPoiLabels: 'Etykiety POI',
+        lblPoiSize: 'Rozmiar POI:',
+        lblPoiOnElev: 'POI na wykresie',
+        secTracks: 'Trasy GPX',
+        secPois: 'Punkty POI',
+        dropTitle: '1. Wrzuć pliki .gpx',
+        dropSub: 'Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.',
+        statusInit: 'Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.',
+        statusLoaded: (n, poiTxt, maxKm) => `Załadowano ${n} tras${poiTxt} • Najdłuższa: ${maxKm} km - kliknij „Generuj video”.`,
+        statusPickAdd: 'Tryb dodawania POI: kliknij wybrane miejsce na mapie (Esc lub kliknij „📍 Dodaj POI klikając na mapie”, aby zakończyć).',
+        statusPickMove: 'Kliknij na mapę, aby przenieść wybrany punkt POI w nowe miejsce (Esc = anuluj).',
+        statusOsmBlocked: 'Podgląd lokalny bez nagłówka Referer (OSM 403) - na GitHub Pages OpenStreetMap zadziała, a lokalnie możesz wybrać Dark Mode lub Topo.',
+        slotAddN: (n) => `Dodaj GPX #${n}`,
+        slotAddNext: 'Dodaj kolejny GPX',
+        poiAddBtn: 'Dodaj POI (lub wpisz lat, lon)',
+        poiIcons: { diamond: '◆ Romb', pin: '📍 Pinezka', flag: '⚑ Flaga', target: '⌖ Cel', dot: '● Kropka' },
+        hudHour: 'Godzina',
+        hudElapsed: 'Czas',
+        hudWait: ' (czeka)',
+        recFetch: 'Pobieranie kafelków mapy...',
+        recPrep: 'Przygotowywanie kafelków mapy przed nagraniem...',
+        recProg: (p) => `Nagrywanie ${p}%...`,
+        recStatus: (p) => `Trwa generowanie pliku wideo (${p}%)...`,
+        tipRev: 'Odwróć ten track',
+        tipRand: 'Losowy kolor',
+        tipDelGpx: 'Usuń ten plik GPX',
+        tipDelSlot: 'Usuń ten pusty slot',
+        tipMovePoi: 'Kliknij na mapę, aby przenieść ten POI',
+        tipDelPoi: 'Usuń punkt POI',
+        tipName: 'Wpisz własną nazwę (widoczną w legendzie i przy kropce)',
+        tipCoord: 'Wklej współrzędne (lat, lon) np. z Google Maps',
+        footerTxt: '© GPX Alive, stworzone przez Radek Piotrowski',
+        footerHome: 'Strona główna'
       }
     };
 
-    let currentLang = localStorage.getItem('gpx_anim_lang') === 'en' ? 'en' : 'pl';
+    const urlLang = new URLSearchParams(window.location.search).get('lang');
+    const savedLang = localStorage.getItem('gpx_anim_lang');
+    let currentLang = (urlLang === 'pl' || urlLang === 'en') ? urlLang : (savedLang === 'pl' ? 'pl' : 'en');
     const tr = () => I18N[currentLang];
 
     const BASIC_COLORS = [
-      { key: 'orange', name: 'Pomarańczowy / Orange', hex: '#f97316', core: '#ffdfba' },
-      { key: 'purple', name: 'Fioletowy / Purple',    hex: '#a855f7', core: '#f3e8ff' },
-      { key: 'blue',   name: 'Niebieski / Blue',      hex: '#3b82f6', core: '#dbeafe' },
-      { key: 'green',  name: 'Zielony / Green',       hex: '#22c55e', core: '#dcfce7' },
-      { key: 'red',    name: 'Czerwony / Red',        hex: '#ef4444', core: '#fecaca' },
-      { key: 'yellow', name: 'Żółty / Yellow',        hex: '#eab308', core: '#fef9c3' },
-      { key: 'teal',   name: 'Turkusowy / Teal',      hex: '#14b8a6', core: '#ccfbf1' },
-      { key: 'pink',   name: 'Różowy / Pink',         hex: '#ec4899', core: '#fce7f3' },
-      { key: 'lime',   name: 'Limonkowy / Lime',      hex: '#84cc16', core: '#ecfccb' },
-      { key: 'sky',    name: 'Błękitny / Sky',        hex: '#0ea5e9', core: '#e0f2fe' }
+      { key: 'orange', name: 'Orange / Pomarańczowy', hex: '#f97316', core: '#ffdfba' },
+      { key: 'purple', name: 'Purple / Fioletowy',    hex: '#a855f7', core: '#f3e8ff' },
+      { key: 'blue',   name: 'Blue / Niebieski',      hex: '#3b82f6', core: '#dbeafe' },
+      { key: 'green',  name: 'Green / Zielony',       hex: '#22c55e', core: '#dcfce7' },
+      { key: 'red',    name: 'Red / Czerwony',        hex: '#ef4444', core: '#fecaca' },
+      { key: 'yellow', name: 'Yellow / Żółty',        hex: '#eab308', core: '#fef9c3' },
+      { key: 'teal',   name: 'Teal / Turkusowy',      hex: '#14b8a6', core: '#ccfbf1' },
+      { key: 'pink',   name: 'Pink / Różowy',         hex: '#ec4899', core: '#fce7f3' },
+      { key: 'lime',   name: 'Lime / Limonkowy',      hex: '#84cc16', core: '#ecfccb' },
+      { key: 'sky',    name: 'Sky / Błękitny',        hex: '#0ea5e9', core: '#e0f2fe' }
     ];
 
     const POI_COLORS = [
       ...BASIC_COLORS,
-      { key: 'white', name: 'Biały / White', hex: '#ffffff', core: '#e2e8f0' }
+      { key: 'white', name: 'White / Biały', hex: '#ffffff', core: '#e2e8f0' }
     ];
 
     const POI_ICON_KEYS = ['diamond', 'pin', 'flag', 'target', 'dot'];
@@ -892,6 +950,9 @@
     let startTime = null;
     let rafId = null;
     let isRecording = false;
+    let isPaused = false;
+    let pausedElapsed = 0;
+    let lastElapsed = 0;
 
     const dotLayer = document.createElement('canvas');
     dotLayer.width = 96;
@@ -903,8 +964,14 @@
     tileCheckCanvas.height = 256;
     const tileCheckCtx = tileCheckCanvas.getContext('2d', { willReadFrequently: true });
 
+    function updatePauseBtnUI() {
+      const t = tr();
+      pauseBtn.textContent = isPaused ? t.btnResume : t.btnPause;
+      pauseBtn.classList.toggle('active-mode', isPaused);
+    }
+
     function applyLanguage(lang) {
-      currentLang = lang === 'en' ? 'en' : 'pl';
+      currentLang = lang === 'pl' ? 'pl' : 'en';
       localStorage.setItem('gpx_anim_lang', currentLang);
       document.documentElement.lang = currentLang;
       const t = tr();
@@ -922,6 +989,7 @@
         if (t[key] !== undefined) el.innerHTML = t[key];
       });
 
+      updatePauseBtnUI();
       renderSlotsUI();
       renderPoisUI();
       if (!isRecording) updateStatusLine();
@@ -1336,7 +1404,6 @@
 
     function setPickMode(mode) {
       mapPickMode = mode;
-      addPoiMapBtn.classList.toggle('active-mode', mode === 'add');
       canvas.style.cursor = mode ? 'crosshair' : 'default';
       renderPoisUI();
       if (mode === 'add') {
@@ -1490,7 +1557,9 @@
 
     function renderPoisUI() {
       const t = tr();
+      const hasTracks = getActiveSlots().length > 0;
       poisGrid.innerHTML = '';
+
       pois.forEach((poi, idx) => {
         const card = document.createElement('div');
         card.className = 'slot-card';
@@ -1523,7 +1592,7 @@
         moveBtn.className = 'mini-btn' + (mapPickMode === poi.id ? ' active' : '');
         moveBtn.textContent = '🎯';
         moveBtn.title = t.tipMovePoi;
-        moveBtn.disabled = getActiveSlots().length === 0;
+        moveBtn.disabled = !hasTracks;
         moveBtn.addEventListener('click', () => {
           setPickMode(mapPickMode === poi.id ? null : poi.id);
         });
@@ -1612,6 +1681,19 @@
         poisGrid.appendChild(card);
       });
 
+      // Przeniesiony przycisk "Dodaj POI klikając na mapie" w sekcji POI
+      const addPoiMapBtn = document.createElement('button');
+      addPoiMapBtn.type = 'button';
+      addPoiMapBtn.className = 'add-slot-btn poi-add' + (mapPickMode === 'add' ? ' active-mode' : '');
+      addPoiMapBtn.disabled = !hasTracks;
+      addPoiMapBtn.textContent = t.btnAddPoiMap;
+      addPoiMapBtn.addEventListener('click', () => {
+        if (!getActiveSlots().length) return;
+        setPickMode(mapPickMode === 'add' ? null : 'add');
+      });
+      poisGrid.appendChild(addPoiMapBtn);
+
+      // Guzik obok: "Dodaj POI (lub wpisz lat, lon)" bez zmian
       const addPoiBtn = document.createElement('button');
       addPoiBtn.type = 'button';
       addPoiBtn.className = 'add-slot-btn poi-add';
@@ -1625,13 +1707,15 @@
 
     function onTracksChanged() {
       const active = getActiveSlots();
-      renderSlotsUI();
-      renderPoisUI();
       if (active.length === 0) {
         setPickMode(null);
+        isPaused = false;
+        updatePauseBtnUI();
         dropOverlay.classList.remove('hidden');
-        addPoiMapBtn.disabled = true;
+        pauseBtn.disabled = true;
         recordBtn.disabled = true;
+        renderSlotsUI();
+        renderPoisUI();
         statusText.textContent = tr().statusInit;
         if (rafId) cancelAnimationFrame(rafId);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1639,8 +1723,10 @@
       }
 
       dropOverlay.classList.add('hidden');
-      addPoiMapBtn.disabled = false;
+      pauseBtn.disabled = false;
       recordBtn.disabled = false;
+      renderSlotsUI();
+      renderPoisUI();
 
       recomputeGlobalTimeline();
       startAnimation();
@@ -2137,7 +2223,7 @@
       const globalT = Math.min(1, elapsedMs / dur);
       const rideT = Math.max(0, Math.min(1, (globalT - 0.08) / 0.84));
       const currentSimMs = globalStartMs + rideT * globalSpanMs;
-      const pulsePhase = (elapsedMs % 1400) / 1400;
+      const pulsePhase = isPaused ? 0 : (elapsedMs % 1400) / 1400;
 
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = '#182028';
@@ -2564,18 +2650,40 @@
     function loop(ts) {
       if (!startTime) startTime = ts;
       const dur = getDurationMs();
-      const elapsed = isRecording
-        ? Math.min(dur, ts - startTime)
-        : (ts - startTime) % (dur + 1200);
-      renderFrame(Math.min(elapsed, dur));
+      let elapsed;
+      if (isRecording) {
+        elapsed = Math.min(dur, ts - startTime);
+      } else if (isPaused) {
+        elapsed = pausedElapsed;
+      } else {
+        elapsed = (ts - startTime) % (dur + 1200);
+      }
+      lastElapsed = Math.min(elapsed, dur);
+      renderFrame(lastElapsed);
       rafId = requestAnimationFrame(loop);
     }
 
     function startAnimation() {
       if (rafId) cancelAnimationFrame(rafId);
+      isPaused = false;
+      pausedElapsed = 0;
+      lastElapsed = 0;
+      updatePauseBtnUI();
       startTime = null;
       rafId = requestAnimationFrame(loop);
     }
+
+    pauseBtn.addEventListener('click', () => {
+      if (!getActiveSlots().length || isRecording) return;
+      if (!isPaused) {
+        isPaused = true;
+        pausedElapsed = lastElapsed;
+      } else {
+        isPaused = false;
+        startTime = performance.now() - pausedElapsed;
+      }
+      updatePauseBtnUI();
+    });
 
     canvas.addEventListener('click', (e) => {
       if (!mapPickMode || !getActiveSlots().length) return;
@@ -2610,11 +2718,6 @@
       if (e.key === 'Escape' && mapPickMode !== null) setPickMode(null);
     });
 
-    addPoiMapBtn.addEventListener('click', () => {
-      if (!getActiveSlots().length) return;
-      setPickMode(mapPickMode === 'add' ? null : 'add');
-    });
-
     inPoiScale.addEventListener('input', () => {
       const pct = Math.round((parseFloat(inPoiScale.value) || 1) * 100);
       poiScaleVal.textContent = `${pct}%`;
@@ -2647,7 +2750,7 @@
       if (getActiveSlots().length) {
         computeOverviewCamera();
         preloadTiles();
-        startAnimation();
+        if (!isPaused) startAnimation();
       } else {
         syncDarkModeVisibility();
       }
@@ -2657,7 +2760,7 @@
       if (getActiveSlots().length) {
         computeOverviewCamera();
         preloadTiles();
-        startAnimation();
+        if (!isPaused) startAnimation();
       } else {
         syncDarkModeVisibility();
       }
@@ -2670,7 +2773,7 @@
       if (getActiveSlots().length) {
         computeOverviewCamera();
         preloadTiles();
-        startAnimation();
+        if (!isPaused) startAnimation();
       }
     });
 
@@ -2695,9 +2798,14 @@
       if (!getActiveSlots().length || isRecording) return;
       setPickMode(null);
 
+      // Wideo zawsze nagrywa pełny przejazd od początku do końca (ignoruje pauzę podglądu)
+      isPaused = false;
+      updatePauseBtnUI();
+
       const t = tr();
       isRecording = true;
       recordBtn.disabled = true;
+      pauseBtn.disabled = true;
       recordBtn.textContent = t.recFetch;
       statusText.textContent = t.recPrep;
 
@@ -2728,11 +2836,12 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `gpx-animation.${ext}`;
+        a.download = `gpx-alive-animation.${ext}`;
         a.click();
         URL.revokeObjectURL(url);
 
         recordBtn.disabled = false;
+        pauseBtn.disabled = false;
         recordBtn.textContent = tr().btnGenerate;
         updateStatusLine();
         startAnimation();

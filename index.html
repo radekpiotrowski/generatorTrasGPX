@@ -1,11 +1,64 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Generator Animacji tras GPXReel - Zamień ślad GPX w wideo</title>
-  <meta name="description" content="Darmowy generator animacji tras GPX na mapach OpenStreetMap, Dark Mode i Topo 3D. Wgraj jedną lub wiele tras, dodaj punkty POI i pobierz gotowe wideo." />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23fb923c'/%3E%3Cstop offset='100%25' stop-color='%23ea580c'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M16 46 C16 30, 46 38, 47 19' fill='none' stroke='%23ffffff' stroke-width='5.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='46' r='4.5' fill='%23ffffff'/%3E%3Ccircle cx='47' cy='19' r='6.8' fill='%230f1b18' stroke='%23ffffff' stroke-width='4'/%3E%3C/svg%3E" />
+  <title>GPX Alive – Free GPX to Video Animation Maker</title>
+  <meta name="description" content="Free GPX to video animation maker. Upload one or many GPX tracks, add POIs and export 60 FPS videos for Reels, Shorts and YouTube. Runs in your browser." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="GPX Alive – Turn GPX Tracks into Video Animations" />
+  <meta property="og:description" content="Animate your route on a map, compare multiple tracks side by side and export ready-to-post video. Free, no sign-up, 100% private." />
+  <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How do I convert a GPX file to a video?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Upload your GPX file to GPX Alive, choose a map style and video format, then click \"Generate video\". The route is animated on the map and saved as a video file."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is GPX Alive really free?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. It is free, has no ads and needs no account."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Are my GPX files uploaded anywhere?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Everything runs locally in your browser, so your tracks stay on your device."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I compare several tracks in one video?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Add multiple GPX files, give each a name and color, and watch them move on the same map and elevation chart."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where can I get GPX files?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Export them from Strava, Garmin Connect, Komoot, Veloplanner and most other sports or route-planning apps."
+        }
+      }
+    ]
+  }
+  </script>
+
   <style>
     :root {
       --bg: #08100e;
@@ -63,7 +116,7 @@
       align-items: center;
       gap: 10px;
       font-weight: 800;
-      font-size: 16px;
+      font-size: 15px;
       letter-spacing: -0.01em;
     }
     .brand-badge {
@@ -84,7 +137,7 @@
     .nav-links {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 18px;
       font-size: 14px;
       font-weight: 600;
       color: var(--muted);
@@ -94,6 +147,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-shrink: 0;
     }
 
     .lang-switch {
@@ -345,6 +399,44 @@
     .feat-card h3 { margin: 0; font-size: 16px; }
     .feat-card p { margin: 0; font-size: 13.5px; color: var(--muted); }
 
+    .faq-list {
+      max-width: 820px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .faq-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 18px;
+    }
+    .faq-item summary {
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: "+";
+      color: var(--accent);
+      font-size: 19px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .faq-item[open] summary::after { content: "-"; }
+    .faq-item p {
+      margin: 10px 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
     .coffee-box {
       background: linear-gradient(135deg, rgba(255, 221, 0, 0.08), rgba(249, 115, 22, 0.09));
       border: 1px solid rgba(255, 221, 0, 0.25);
@@ -363,14 +455,21 @@
       text-align: center;
       font-size: 13px;
       color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .footer-attr {
+      font-size: 12px;
+      opacity: 0.78;
     }
 
-    @media (max-width: 900px) {
+    @media (max-width: 960px) {
       .demo-grid, .steps-grid, .features-grid { grid-template-columns: 1fr; }
       .nav-links { display: none; }
     }
-    @media (max-width: 520px) {
-      .brand span { font-size: 14px; }
+    @media (max-width: 560px) {
+      .brand span { font-size: 13px; }
       .nav-actions .btn-coffee { display: none; }
       .hero { padding-top: 40px; }
     }
@@ -381,8 +480,8 @@
   <header>
     <div class="container nav">
       <a href="#" class="brand">
-        <div class="brand-badge" aria-hidden="true">
-          <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+        <div class="brand-badge">
+          <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPX Alive logo - GPX to video animation maker">
             <defs>
               <linearGradient id="navLogoGrad" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stop-color="#fb923c" />
@@ -395,23 +494,24 @@
             <circle cx="47" cy="19" r="6.8" fill="#0f1b18" stroke="#ffffff" stroke-width="4" />
           </svg>
         </div>
-        <span data-i18n="brandName">GPX Reel Animation</span>
+        <span data-i18n="brandName">GPX Alive – GPX to Video Animation Maker</span>
       </a>
 
       <nav class="nav-links">
-        <a href="#demo" data-i18n="navDemo">Podgląd wideo</a>
-        <a href="#jak-dziala" data-i18n="navHow">Jak używać</a>
-        <a href="#opcje" data-i18n="navOptions">Opcje</a>
-        <a href="#wsparcie" data-i18n="navSupport">Wsparcie</a>
+        <a href="#demo" data-i18n="navDemo">Examples</a>
+        <a href="#jak-dziala" data-i18n="navHow">How it works</a>
+        <a href="#opcje" data-i18n="navOptions">Features</a>
+        <a href="#faq" data-i18n="navFaq">FAQ</a>
+        <a href="#wsparcie" data-i18n="navSupport">Support</a>
       </nav>
 
       <div class="nav-actions">
         <div class="lang-switch" role="group" aria-label="Language">
-          <button type="button" class="lang-btn active" data-lang="pl">PL</button>
-          <button type="button" class="lang-btn" data-lang="en">EN</button>
+          <button type="button" class="lang-btn active" data-lang="en">EN</button>
+          <button type="button" class="lang-btn" data-lang="pl">PL</button>
         </div>
-        <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="btn btn-coffee" data-i18n="navCoffee">☕ Postaw kawę</a>
-        <a href="./generator.html" class="btn btn-primary" data-i18n="navLaunch">Uruchom →</a>
+        <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="btn btn-coffee" data-i18n="navCoffee">☕ Buy me a coffee</a>
+        <a href="./generator.html" class="btn btn-primary" data-i18n="navLaunch">Launch GPX Alive</a>
       </div>
     </div>
   </header>
@@ -419,21 +519,20 @@
   <main>
     <section class="hero">
       <div class="container">
-        <div class="pill" data-i18n="heroPill">100% za darmo • Bez logowania • Działa lokalnie w przeglądarce</div>
-        <h1 data-i18n-html="heroTitle">Zamień pliki <span>GPX</span> w dynamiczną animację trasy na mapie</h1>
+        <div class="pill" data-i18n="heroPill">100% free • No sign-up • Runs locally in your browser</div>
+        <h1 data-i18n-html="heroTitle">Turn <span>GPX</span> files into animated route videos</h1>
         <p data-i18n="heroSub">
-          Wgraj jedną trasę albo porównaj przejazd wielu osób naraz w czasie rzeczywistym.
-          Dodaj punkty POI, wybierz podkład mapowy i wyeksportuj gotowe wideo na Stravę, YouTube lub Instagram Reels.
+          Upload one track or compare several riders at once. Add POIs, pick a map style and export a ready-to-share video for Strava, YouTube or Instagram Reels.
         </p>
         <div class="hero-cta">
-          <a href="./generator.html" class="btn btn-primary btn-lg" data-i18n="heroCtaOpen">Otwórz Generator →</a>
-          <a href="#demo" class="btn btn-secondary btn-lg" data-i18n="heroCtaDemo">Zobacz przykłady wideo</a>
+          <a href="./generator.html" class="btn btn-primary btn-lg" data-i18n="heroCtaOpen">Open Generator →</a>
+          <a href="#demo" class="btn btn-secondary btn-lg" data-i18n="heroCtaDemo">See examples</a>
           <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="btn btn-coffee btn-lg">☕ BuyCoffee.to</a>
         </div>
         <div class="trust-strip">
-          <span data-i18n="trust1">Zero wysyłania GPX na serwer</span>
-          <span data-i18n="trust2">Eksport wideo 60 FPS</span>
-          <span data-i18n="trust3">Formaty 16:9, 9:16 i 1:1</span>
+          <span data-i18n="trust1">No GPX upload to any server</span>
+          <span data-i18n="trust2">60 FPS video export</span>
+          <span data-i18n="trust3">16:9, 9:16 and 1:1 formats</span>
         </div>
       </div>
     </section>
@@ -441,44 +540,44 @@
     <section id="demo">
       <div class="container">
         <div class="sec-head">
-          <h2 data-i18n="demoTitle">Zobacz, jak wygląda gotowa animacja</h2>
-          <p data-i18n="demoSub">Dwa typowe scenariusze: pojedyncza wyprawa oraz wspólny przejazd lub rywalizacja kilku plików GPX na jednej mapie.</p>
+          <h2 data-i18n="demoTitle">See GPX animations in action</h2>
+          <p data-i18n="demoSub">Two typical GPX to video scenarios: a solo trip and a group ride or race with multiple tracks on a single map.</p>
         </div>
 
         <div class="demo-grid">
           <div class="demo-card">
             <div class="demo-media">
-              <video autoplay loop muted playsinline controls id="vidSingle">
+              <video autoplay loop muted playsinline controls id="vidSingle" aria-label="Single GPX to video animation with elevation profile">
                 <source src="./demo-single.mp4" type="video/mp4" />
                 <source src="./demo-single.webm" type="video/webm" />
               </video>
               <div class="video-fallback" id="fbSingle">
-                <strong data-i18n="fb1Title">Podgląd pojedynczej trasy</strong>
-                <span data-i18n-html="fb1Sub">Wrzuć wygenerowany klip jako <code>demo-single.mp4</code> (lub <code>.webm</code>) do folderu ze stroną, a pojawi się tutaj automatycznie.</span>
+                <strong data-i18n="fb1Title">Single route GPX animation</strong>
+                <span data-i18n-html="fb1Sub">Place your exported clip as <code>demo-single.mp4</code> (or <code>.webm</code>) next to <code>index.html</code> to display it here.</span>
               </div>
             </div>
             <div class="demo-body">
-              <span class="demo-tag" data-i18n="demo1Tag">1 plik GPX</span>
-              <h3 data-i18n="demo1Title">Pojedyncza trasa z profilem wysokości</h3>
-              <p data-i18n="demo1Desc">Rysowanie śladu na mapie wraz z wykresem przewyższeń i punktami POI - idealne na podsumowanie wycieczki rowerowej lub trekkingu.</p>
+              <span class="demo-tag" data-i18n="demo1Tag">1 GPX file</span>
+              <h3 data-i18n="demo1Title">Single GPX to video animation with elevation profile</h3>
+              <p data-i18n="demo1Desc">Smooth GPX animation on the map synced with an elevation chart and POI markers - great for bike trip or hiking recaps.</p>
             </div>
           </div>
 
           <div class="demo-card">
             <div class="demo-media">
-              <video autoplay loop muted playsinline controls id="vidMulti">
+              <video autoplay loop muted playsinline controls id="vidMulti" aria-label="Multi-track GPX animation in real time">
                 <source src="./demo-multi.mp4" type="video/mp4" />
                 <source src="./demo-multi.webm" type="video/webm" />
               </video>
               <div class="video-fallback" id="fbMulti">
-                <strong data-i18n="fb2Title">Podgląd wielu tras naraz</strong>
-                <span data-i18n-html="fb2Sub">Wrzuć wygenerowany klip jako <code>demo-multi.mp4</code> (lub <code>.webm</code>) do folderu ze stroną, a pojawi się tutaj automatycznie.</span>
+                <strong data-i18n="fb2Title">Multi-track GPX animation</strong>
+                <span data-i18n-html="fb2Sub">Place your exported clip as <code>demo-multi.mp4</code> (or <code>.webm</code>) next to <code>index.html</code> to display it here.</span>
               </div>
             </div>
             <div class="demo-body">
               <span class="demo-tag" data-i18n="demo2Tag">Multi-GPX + POI</span>
-              <h3 data-i18n="demo2Title">Wiele śladów w jednym czasie i wykresie</h3>
-              <p data-i18n="demo2Desc">Różne godziny startu i mety, własne nazwy przy kropkach, wspólny wykres wysokości oraz kolorowe znaczniki taktyczne POI.</p>
+              <h3 data-i18n="demo2Title">Multiple GPX tracks in one GPX to video animation</h3>
+              <p data-i18n="demo2Desc">Real start and finish times, custom labels moving with dots, shared elevation chart, and colorful tactical POI markers.</p>
             </div>
           </div>
         </div>
@@ -488,25 +587,24 @@
     <section id="jak-dziala">
       <div class="container">
         <div class="sec-head">
-          <h2 data-i18n="howTitle">Jak stworzyć wideo w 3 krokach?</h2>
-          <p data-i18n="howSub">Cały proces zajmuje kilkadziesiąt sekund i nie wymaga instalowania żadnych programów.</p>
+          <h2 data-i18n="howTitle">How to make a GPX video in 3 steps</h2>
         </div>
 
         <div class="steps-grid">
           <div class="step-card">
             <div class="step-num">1</div>
-            <h3 data-i18n="step1Title">Wgraj jeden lub kilka plików GPX</h3>
-            <p data-i18n-html="step1Desc">Eksportuj ślad z Veloplannera, Stravy, Garmina lub Komoota i przeciągnij na stronę. Kolejne trasy dołożysz przyciskiem <strong>Dodaj kolejny GPX</strong>.</p>
+            <h3 data-i18n="step1Title">Upload your GPX files</h3>
+            <p data-i18n-html="step1Desc">Export a track from Strava, Garmin, Komoot or Veloplanner and drop it on the page. Add more tracks with <strong>"Add another GPX"</strong>.</p>
           </div>
           <div class="step-card">
             <div class="step-num">2</div>
-            <h3 data-i18n="step2Title">Ustaw mapę, kolory i POI</h3>
-            <p data-i18n="step2Desc">Wybierz styl mapy (np. OpenStreetMap, Dark Mode, Topo 3D), format pod YouTube/Reels, zmień nazwy tras oraz zaznacz własne punkty POI na mapie.</p>
+            <h3 data-i18n="step2Title">Set up map, colors and POIs</h3>
+            <p data-i18n="step2Desc">Choose a map style, video format and track names, then place your own points of interest on the map.</p>
           </div>
           <div class="step-card">
             <div class="step-num">3</div>
-            <h3 data-i18n="step3Title">Kliknij „2. Generuj video”</h3>
-            <p data-i18n="step3Desc">Generator wczyta kafelki mapy i zapisze płynny plik wideo gotowy do publikacji w mediach społecznościowych.</p>
+            <h3 data-i18n="step3Title">Click "Generate video"</h3>
+            <p data-i18n="step3Desc">GPX Alive loads the map tiles and renders a smooth video file ready for social media.</p>
           </div>
         </div>
       </div>
@@ -515,41 +613,71 @@
     <section id="opcje">
       <div class="container">
         <div class="sec-head">
-          <h2 data-i18n="optTitle">Dostępne opcje i możliwości</h2>
-          <p data-i18n="optSub">Wszystko, czego potrzebujesz, żeby dopasować wygląd animacji do swojej relacji z trasy.</p>
+          <h2 data-i18n="optTitle">Features</h2>
         </div>
 
         <div class="features-grid">
           <div class="feat-card">
             <div class="feat-ico">🗺️</div>
-            <h3 data-i18n="f1Title">8 podkładów mapowych</h3>
-            <p data-i18n-html="f1Desc">Klasyczny OpenStreetMap, autorski wektorowy <strong>Dark Mode</strong> bez napisów, <strong>Topo 3D (Relief)</strong> z cieniowaniem gór, CyclOSM, OpenTopoMap oraz Satelita.</p>
+            <h3 data-i18n="f1Title">8 map styles</h3>
+            <p data-i18n="f1Desc">OpenStreetMap, a custom vector Dark Mode, Topo 3D relief shading, CyclOSM, OpenTopoMap and Satellite.</p>
           </div>
           <div class="feat-card">
             <div class="feat-ico">⏱️</div>
-            <h3 data-i18n="f2Title">Synchronizacja czasu z GPX</h3>
-            <p data-i18n="f2Desc">Animacja odczytuje znaczniki godzin rozpoczęcia i zakończenia z każdego pliku osobno - widać realne tempo i kolejność na trasie.</p>
+            <h3 data-i18n="f2Title">Real-time sync</h3>
+            <p data-i18n="f2Desc">The animation reads start and end times from each GPX file, so you see the real pace and order on the route.</p>
           </div>
           <div class="feat-card">
             <div class="feat-ico">⛰️</div>
-            <h3 data-i18n="f3Title">Wspólny wykres wysokości</h3>
-            <p data-i18n="f3Desc">Profile wszystkich tras na jednym wykresie (oś kilometrów dopasowana do najdłuższego tracka), z opcją wyłączenia dla maksymalnego powiększenia mapy.</p>
+            <h3 data-i18n="f3Title">Shared elevation profile</h3>
+            <p data-i18n="f3Desc">All tracks on one chart, scaled to the longest route. Turn it off for a bigger map.</p>
           </div>
           <div class="feat-card">
             <div class="feat-ico">📍</div>
-            <h3 data-i18n="f4Title">Własne punkty POI</h3>
-            <p data-i18n-html="f4Desc">Import waypointów z GPX, stawianie POI kliknięciem w mapę albo wklejaniem współrzędnych <code>lat, lon</code>, zmiana ikon, skali, etykiet i synchronizacja z wykresem.</p>
+            <h3 data-i18n="f4Title">Custom POIs</h3>
+            <p data-i18n-html="f4Desc">Import waypoints from GPX, click the map or paste <code>lat, lon</code> coordinates. Change icons, size and labels.</p>
           </div>
           <div class="feat-card">
             <div class="feat-ico">📱</div>
-            <h3 data-i18n="f5Title">Formaty 16:9, 9:16 i 1:1</h3>
-            <p data-i18n="f5Desc">W formacie pionowym 9:16 legenda automatycznie układa się nad mapą, aby nigdy nie zasłaniała rysowanych tras. Po ukryciu legendy mapa maksymalnie przybliża kadr.</p>
+            <h3 data-i18n="f5Title">16:9, 9:16 and 1:1</h3>
+            <p data-i18n="f5Desc">In vertical mode the legend sits above the map so it never covers your tracks.</p>
           </div>
           <div class="feat-card">
             <div class="feat-ico">🔒</div>
-            <h3 data-i18n="f6Title">100% prywatności</h3>
-            <p data-i18n="f6Desc">Twoje pliki GPX są przetwarzane wyłącznie w pamięci przeglądarki na Twoim urządzeniu. Nic nie jest zapisywane ani wysyłane na zewnętrzne serwery.</p>
+            <h3 data-i18n="f6Title">100% private</h3>
+            <p data-i18n="f6Desc">Your GPX files are processed in your browser's memory. Nothing is stored or sent to a server.</p>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="container">
+        <div class="sec-head">
+          <h2 data-i18n="faqTitle">Frequently Asked Questions</h2>
+        </div>
+
+        <div class="faq-list">
+          <details class="faq-item" open>
+            <summary data-i18n="q1">How do I convert a GPX file to a video?</summary>
+            <p data-i18n="a1">Upload your GPX file to GPX Alive, choose a map style and video format, then click "Generate video". The route is animated on the map and saved as a video file.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="q2">Is GPX Alive really free?</summary>
+            <p data-i18n="a2">Yes. It is free, has no ads and needs no account.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="q3">Are my GPX files uploaded anywhere?</summary>
+            <p data-i18n="a3">No. Everything runs locally in your browser, so your tracks stay on your device.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="q4">Can I compare several tracks in one video?</summary>
+            <p data-i18n="a4">Yes. Add multiple GPX files, give each a name and color, and watch them move on the same map and elevation chart.</p>
+          </details>
+          <details class="faq-item">
+            <summary data-i18n="q5">Where can I get GPX files?</summary>
+            <p data-i18n="a5">Export them from Strava, Garmin Connect, Komoot, Veloplanner and most other sports or route-planning apps.</p>
+          </details>
         </div>
       </div>
     </section>
@@ -557,13 +685,12 @@
     <section id="wsparcie">
       <div class="container">
         <div class="coffee-box">
-          <h2 data-i18n="coffeeTitle">Podoba Ci się narzędzie? Postaw mi kawę ☕</h2>
+          <h2 data-i18n="coffeeTitle">Like GPX Alive? Buy me a coffee ☕</h2>
           <p data-i18n="coffeeDesc">
-            Generator jest całkowicie darmowy i bez reklam. Jeśli pomógł Ci przygotować fajny film z wyprawy lub rozgrywki,
-            możesz dobrowolnie wesprzeć rozwój projektu symboliczną kawą.
+            GPX Alive is completely free and ad-free. If it helped you make a great video of your trip or race, you can support the project with a small coffee.
           </p>
           <a href="https://buycoffee.to/radekpiotrowski" target="_blank" rel="noopener" class="btn btn-coffee btn-lg" data-i18n="coffeeBtn">
-            ☕ Wesprzyj na buycoffee.to
+            ☕ Support on buycoffee.to
           </a>
         </div>
       </div>
@@ -572,132 +699,173 @@
 
   <footer>
     <div class="container">
-      <span data-i18n="footerTxt">Generator Animacji tras GPX by Radzio • Działa lokalnie w przeglądarce • </span><a href="./generator.html" style="text-decoration: underline;" data-i18n="footerLink">Otwórz narzędzie</a>
+      <div>
+        <span data-i18n="footerTxt">© GPX Alive, created by Radek Piotrowski</span> •
+        <a href="./generator.html" style="text-decoration: underline;" data-i18n="footerLink">Launch GPX Alive</a>
+      </div>
+      <div class="footer-attr" data-i18n="footerAttr">
+        Map tiles &amp; data: © OpenStreetMap contributors, OpenTopoMap, CyclOSM, OpenFreeMap, Esri.
+      </div>
     </div>
   </footer>
 
   <script>
     const I18N = {
+      en: {
+        docTitle: 'GPX Alive – Free GPX to Video Animation Maker',
+        metaDesc: 'Free GPX to video animation maker. Upload one or many GPX tracks, add POIs and export 60 FPS videos for Reels, Shorts and YouTube. Runs in your browser.',
+        ogTitle: 'GPX Alive – Turn GPX Tracks into Video Animations',
+        ogDesc: 'Animate your route on a map, compare multiple tracks side by side and export ready-to-post video. Free, no sign-up, 100% private.',
+        brandName: 'GPX Alive – GPX to Video Animation Maker',
+        navDemo: 'Examples',
+        navHow: 'How it works',
+        navOptions: 'Features',
+        navFaq: 'FAQ',
+        navSupport: 'Support',
+        navCoffee: '☕ Buy me a coffee',
+        navLaunch: 'Launch GPX Alive',
+        heroPill: '100% free • No sign-up • Runs locally in your browser',
+        heroTitle: 'Turn <span>GPX</span> files into animated route videos',
+        heroSub: 'Upload one track or compare several riders at once. Add POIs, pick a map style and export a ready-to-share video for Strava, YouTube or Instagram Reels.',
+        heroCtaOpen: 'Open Generator →',
+        heroCtaDemo: 'See examples',
+        trust1: 'No GPX upload to any server',
+        trust2: '60 FPS video export',
+        trust3: '16:9, 9:16 and 1:1 formats',
+        demoTitle: 'See GPX animations in action',
+        demoSub: 'Two typical GPX to video scenarios: a solo trip and a group ride or race with multiple tracks on a single map.',
+        fb1Title: 'Single route GPX animation',
+        fb1Sub: 'Place your exported clip as <code>demo-single.mp4</code> (or <code>.webm</code>) next to <code>index.html</code> to display it here.',
+        demo1Tag: '1 GPX file',
+        demo1Title: 'Single GPX to video animation with elevation profile',
+        demo1Desc: 'Smooth GPX animation on the map synced with an elevation chart and POI markers - great for bike trip or hiking recaps.',
+        fb2Title: 'Multi-track GPX animation',
+        fb2Sub: 'Place your exported clip as <code>demo-multi.mp4</code> (or <code>.webm</code>) next to <code>index.html</code> to display it here.',
+        demo2Tag: 'Multi-GPX + POI',
+        demo2Title: 'Multiple GPX tracks in one GPX to video animation',
+        demo2Desc: 'Real start and finish times, custom labels moving with dots, shared elevation chart, and colorful tactical POI markers.',
+        howTitle: 'How to make a GPX video in 3 steps',
+        step1Title: 'Upload your GPX files',
+        step1Desc: 'Export a track from Strava, Garmin, Komoot or Veloplanner and drop it on the page. Add more tracks with <strong>"Add another GPX"</strong>.',
+        step2Title: 'Set up map, colors and POIs',
+        step2Desc: 'Choose a map style, video format and track names, then place your own points of interest on the map.',
+        step3Title: 'Click "Generate video"',
+        step3Desc: 'GPX Alive loads the map tiles and renders a smooth video file ready for social media.',
+        optTitle: 'Features',
+        f1Title: '8 map styles',
+        f1Desc: 'OpenStreetMap, a custom vector Dark Mode, Topo 3D relief shading, CyclOSM, OpenTopoMap and Satellite.',
+        f2Title: 'Real-time sync',
+        f2Desc: 'The animation reads start and end times from each GPX file, so you see the real pace and order on the route.',
+        f3Title: 'Shared elevation profile',
+        f3Desc: 'All tracks on one chart, scaled to the longest route. Turn it off for a bigger map.',
+        f4Title: 'Custom POIs',
+        f4Desc: 'Import waypoints from GPX, click the map or paste <code>lat, lon</code> coordinates. Change icons, size and labels.',
+        f5Title: '16:9, 9:16 and 1:1',
+        f5Desc: 'In vertical mode the legend sits above the map so it never covers your tracks.',
+        f6Title: '100% private',
+        f6Desc: "Your GPX files are processed in your browser's memory. Nothing is stored or sent to a server.",
+        faqTitle: 'Frequently Asked Questions',
+        q1: 'How do I convert a GPX file to a video?',
+        a1: 'Upload your GPX file to GPX Alive, choose a map style and video format, then click "Generate video". The route is animated on the map and saved as a video file.',
+        q2: 'Is GPX Alive really free?',
+        a2: 'Yes. It is free, has no ads and needs no account.',
+        q3: 'Are my GPX files uploaded anywhere?',
+        a3: 'No. Everything runs locally in your browser, so your tracks stay on your device.',
+        q4: 'Can I compare several tracks in one video?',
+        a4: 'Yes. Add multiple GPX files, give each a name and color, and watch them move on the same map and elevation chart.',
+        q5: 'Where can I get GPX files?',
+        a5: 'Export them from Strava, Garmin Connect, Komoot, Veloplanner and most other sports or route-planning apps.',
+        coffeeTitle: 'Like GPX Alive? Buy me a coffee ☕',
+        coffeeDesc: 'GPX Alive is completely free and ad-free. If it helped you make a great video of your trip or race, you can support the project with a small coffee.',
+        coffeeBtn: '☕ Support on buycoffee.to',
+        footerTxt: '© GPX Alive, created by Radek Piotrowski',
+        footerLink: 'Launch GPX Alive',
+        footerAttr: 'Map tiles & data: © OpenStreetMap contributors, OpenTopoMap, CyclOSM, OpenFreeMap, Esri.'
+      },
       pl: {
-        docTitle: 'Generator Animacji tras GPX by Radzio - Zamień ślad GPX w wideo',
-        brandName: 'Generator Animacji GPX',
-        navDemo: 'Podgląd wideo',
-        navHow: 'Jak używać',
-        navOptions: 'Opcje',
+        docTitle: 'GPX Alive – generator animacji tras GPX',
+        metaDesc: 'Darmowy generator animacji tras GPX. Wgraj jeden lub wiele śladów, dodaj POI i pobierz wideo 60 FPS na Reels, Shorts i YouTube. Działa w przeglądarce.',
+        ogTitle: 'GPX Alive – zamień ślad GPX w animację wideo',
+        ogDesc: 'Animuj trasę na mapie, porównaj kilka przejazdów naraz i pobierz gotowe wideo. Za darmo, bez logowania, 100% prywatnie.',
+        brandName: 'GPX Alive – zamień ślad GPX w wideo',
+        navDemo: 'Przykłady',
+        navHow: 'Jak to działa',
+        navOptions: 'Funkcje',
+        navFaq: 'FAQ',
         navSupport: 'Wsparcie',
         navCoffee: '☕ Postaw kawę',
-        navLaunch: 'Uruchom →',
+        navLaunch: 'Uruchom GPX Alive',
         heroPill: '100% za darmo • Bez logowania • Działa lokalnie w przeglądarce',
-        heroTitle: 'Zamień pliki <span>GPX</span> w dynamiczną animację trasy na mapie',
-        heroSub: 'Wgraj jedną trasę albo porównaj przejazd wielu osób naraz w czasie rzeczywistym. Dodaj punkty POI, wybierz podkład mapowy i wyeksportuj gotowe wideo na Stravę, YouTube lub Instagram Reels.',
-        heroCtaOpen: 'Otwórz Generator →',
-        heroCtaDemo: 'Zobacz przykłady wideo',
+        heroTitle: 'Zamień pliki <span>GPX</span> w animowane wideo trasy',
+        heroSub: 'Wgraj jedną trasę albo porównaj przejazd kilku osób naraz. Dodaj punkty POI, wybierz styl mapy i pobierz gotowe wideo na Stravę, YouTube lub Instagram Reels.',
+        heroCtaOpen: 'Otwórz generator →',
+        heroCtaDemo: 'Zobacz przykłady',
         trust1: 'Zero wysyłania GPX na serwer',
         trust2: 'Eksport wideo 60 FPS',
         trust3: 'Formaty 16:9, 9:16 i 1:1',
-        demoTitle: 'Zobacz, jak wygląda gotowa animacja',
+        demoTitle: 'Zobacz animacje GPX w akcji',
         demoSub: 'Dwa typowe scenariusze: pojedyncza wyprawa oraz wspólny przejazd lub rywalizacja kilku plików GPX na jednej mapie.',
         fb1Title: 'Podgląd pojedynczej trasy',
-        fb1Sub: 'Wrzuć wygenerowany klip jako <code>demo-single.mp4</code> (lub <code>.webm</code>) do folderu ze stroną, a pojawi się tutaj automatycznie.',
+        fb1Sub: 'Wrzuć wygenerowany klip jako <code>demo-single.mp4</code> (lub <code>.webm</code>) obok <code>index.html</code>, a pojawi się tutaj automatycznie.',
         demo1Tag: '1 plik GPX',
-        demo1Title: 'Pojedyncza trasa z profilem wysokości',
-        demo1Desc: 'Rysowanie śladu na mapie wraz z wykresem przewyższeń i punktami POI - idealne na podsumowanie wycieczki rowerowej lub trekkingu.',
+        demo1Title: 'Pojedyncza animacja GPX z profilem wysokości',
+        demo1Desc: 'Płynne rysowanie śladu na mapie wraz z wykresem przewyższeń i punktami POI - idealne na podsumowanie wycieczki lub trekkingu.',
         fb2Title: 'Podgląd wielu tras naraz',
-        fb2Sub: 'Wrzuć wygenerowany klip jako <code>demo-multi.mp4</code> (lub <code>.webm</code>) do folderu ze stroną, a pojawi się tutaj automatycznie.',
+        fb2Sub: 'Wrzuć wygenerowany klip jako <code>demo-multi.mp4</code> (lub <code>.webm</code>) obok <code>index.html</code>, a pojawi się tutaj automatycznie.',
         demo2Tag: 'Multi-GPX + POI',
-        demo2Title: 'Wiele śladów w jednym czasie i wykresie',
+        demo2Title: 'Wiele śladów GPX na jednej animacji i wykresie',
         demo2Desc: 'Różne godziny startu i mety, własne nazwy przy kropkach, wspólny wykres wysokości oraz kolorowe znaczniki taktyczne POI.',
-        howTitle: 'Jak stworzyć wideo w 3 krokach?',
-        howSub: 'Cały proces zajmuje kilkadziesiąt sekund i nie wymaga instalowania żadnych programów.',
-        step1Title: 'Wgraj jeden lub kilka plików GPX',
-        step1Desc: 'Eksportuj ślad z Veloplannera, Stravy, Garmina lub Komoota i przeciągnij na stronę. Kolejne trasy dołożysz przyciskiem <strong>Dodaj kolejny GPX</strong>.',
+        howTitle: 'Jak zrobić wideo z pliku GPX w 3 krokach',
+        step1Title: 'Wgraj pliki GPX',
+        step1Desc: 'Wyeksportuj ślad ze Stravy, Garmina, Komoota lub Veloplannera i przeciągnij na stronę. Kolejne trasy dodasz przyciskiem <strong>„Dodaj kolejny GPX”</strong>.',
         step2Title: 'Ustaw mapę, kolory i POI',
-        step2Desc: 'Wybierz styl mapy (np. OpenStreetMap, Dark Mode, Topo 3D), format pod YouTube/Reels, zmień nazwy tras oraz zaznacz własne punkty POI na mapie.',
-        step3Title: 'Kliknij „2. Generuj video”',
-        step3Desc: 'Generator wczyta kafelki mapy i zapisze płynny plik wideo gotowy do publikacji w mediach społecznościowych.',
-        optTitle: 'Dostępne opcje i możliwości',
-        optSub: 'Wszystko, czego potrzebujesz, żeby dopasować wygląd animacji do swojej relacji z trasy.',
+        step2Desc: 'Wybierz styl mapy, format wideo i nazwy tras, a potem zaznacz własne punkty POI na mapie.',
+        step3Title: 'Kliknij „Generuj video”',
+        step3Desc: 'GPX Alive wczyta kafelki mapy i zapisze płynny plik wideo gotowy do publikacji w mediach społecznościowych.',
+        optTitle: 'Funkcje',
         f1Title: '8 podkładów mapowych',
-        f1Desc: 'Klasyczny OpenStreetMap, autorski wektorowy <strong>Dark Mode</strong> bez napisów, <strong>Topo 3D (Relief)</strong> z cieniowaniem gór, CyclOSM, OpenTopoMap oraz Satelita.',
-        f2Title: 'Synchronizacja czasu z GPX',
-        f2Desc: 'Animacja odczytuje znaczniki godzin rozpoczęcia i zakończenia z każdego pliku osobno - widać realne tempo i kolejność na trasie.',
+        f1Desc: 'OpenStreetMap, autorski wektorowy Dark Mode, Topo 3D z cieniowaniem gór, CyclOSM, OpenTopoMap i Satelita.',
+        f2Title: 'Synchronizacja czasu',
+        f2Desc: 'Animacja odczytuje godziny startu i mety z każdego pliku GPX, więc widać realne tempo i kolejność na trasie.',
         f3Title: 'Wspólny wykres wysokości',
-        f3Desc: 'Profile wszystkich tras na jednym wykresie (oś kilometrów dopasowana do najdłuższego tracka), z opcją wyłączenia dla maksymalnego powiększenia mapy.',
+        f3Desc: 'Wszystkie trasy na jednym wykresie, dopasowanym do najdłuższej. Możesz go wyłączyć, żeby powiększyć mapę.',
         f4Title: 'Własne punkty POI',
-        f4Desc: 'Import waypointów z GPX, stawianie POI kliknięciem w mapę albo wklejaniem współrzędnych <code>lat, lon</code>, zmiana ikon, skali, etykiet i synchronizacja z wykresem.',
+        f4Desc: 'Importuj waypointy z GPX, klikaj w mapę albo wklej współrzędne <code>lat, lon</code>. Zmieniaj ikony, skalę i etykiety.',
         f5Title: 'Formaty 16:9, 9:16 i 1:1',
-        f5Desc: 'W formacie pionowym 9:16 legenda automatycznie układa się nad mapą, aby nigdy nie zasłaniała rysowanych tras. Po ukryciu legendy mapa maksymalnie przybliża kadr.',
+        f5Desc: 'W trybie pionowym legenda układa się nad mapą i nie zasłania tras.',
         f6Title: '100% prywatności',
-        f6Desc: 'Twoje pliki GPX są przetwarzane wyłącznie w pamięci przeglądarki na Twoim urządzeniu. Nic nie jest zapisywane ani wysyłane na zewnętrzne serwery.',
-        coffeeTitle: 'Podoba Ci się narzędzie? Postaw mi kawę ☕',
-        coffeeDesc: 'Generator jest całkowicie darmowy i bez reklam. Jeśli pomógł Ci przygotować fajny film z wyprawy lub rozgrywki, możesz dobrowolnie wesprzeć rozwój projektu symboliczną kawą.',
+        f6Desc: 'Pliki GPX są przetwarzane w pamięci Twojej przeglądarki. Nic nie jest zapisywane ani wysyłane na serwer.',
+        faqTitle: 'Najczęściej zadawane pytania (FAQ)',
+        q1: 'Jak zamienić plik GPX na wideo?',
+        a1: 'Wgraj plik GPX do GPX Alive, wybierz styl mapy i format wideo, a potem kliknij „Generuj video”. Trasa zostanie zanimowana na mapie i zapisana jako plik wideo.',
+        q2: 'Czy GPX Alive jest naprawdę darmowy?',
+        a2: 'Tak. Jest bezpłatny, bez reklam i bez zakładania konta.',
+        q3: 'Czy moje pliki GPX są gdzieś wysyłane?',
+        a3: 'Nie. Wszystko działa lokalnie w przeglądarce, więc ślady zostają na Twoim urządzeniu.',
+        q4: 'Czy mogę porównać kilka tras w jednym wideo?',
+        a4: 'Tak. Dodaj kilka plików GPX, nadaj im nazwy i kolory, a zobaczysz je na jednej mapie i jednym wykresie wysokości.',
+        q5: 'Skąd wziąć plik GPX?',
+        a5: 'Wyeksportuj go ze Stravy, Garmin Connect, Komoota, Veloplannera i większości aplikacji sportowych lub do planowania tras.',
+        coffeeTitle: 'Podoba Ci się GPX Alive? Postaw mi kawę ☕',
+        coffeeDesc: 'GPX Alive jest całkowicie darmowy i bez reklam. Jeśli pomógł Ci przygotować fajny film z wyprawy lub zawodów, możesz dobrowolnie wesprzeć projekt symboliczną kawą.',
         coffeeBtn: '☕ Wesprzyj na buycoffee.to',
-        footerTxt: 'Generator Animacji tras GPX by Radzio • Działa lokalnie w przeglądarce • ',
-        footerLink: 'Otwórz narzędzie'
-      },
-      en: {
-        docTitle: 'GPX Route Animation Generator by Radzio - Turn GPX tracks into video',
-        brandName: 'GPX Animation Generator',
-        navDemo: 'Video preview',
-        navHow: 'How it works',
-        navOptions: 'Features',
-        navSupport: 'Support',
-        navCoffee: '☕ Buy me a coffee',
-        navLaunch: 'Launch →',
-        heroPill: '100% free • No sign-up • Runs locally in your browser',
-        heroTitle: 'Turn <span>GPX</span> files into a dynamic route animation on a map',
-        heroSub: 'Upload a single track or compare multiple rides side-by-side in real time. Add custom POI markers, choose your map style, and export video ready for Strava, YouTube, or Instagram Reels.',
-        heroCtaOpen: 'Open Generator →',
-        heroCtaDemo: 'See video examples',
-        trust1: 'Zero GPX uploads to servers',
-        trust2: '60 FPS video export',
-        trust3: '16:9, 9:16 & 1:1 formats',
-        demoTitle: 'See what the finished animation looks like',
-        demoSub: 'Two common scenarios: a solo adventure and a group ride or race with multiple GPX tracks on a single map.',
-        fb1Title: 'Single route preview',
-        fb1Sub: 'Place your exported clip as <code>demo-single.mp4</code> (or <code>.webm</code>) next to this page and it will play here automatically.',
-        demo1Tag: '1 GPX file',
-        demo1Title: 'Single route with elevation profile',
-        demo1Desc: 'Progressive track drawing on the map synced with an elevation chart and POI markers - great for bike trip or hiking recaps.',
-        fb2Title: 'Multi-track preview',
-        fb2Sub: 'Place your exported clip as <code>demo-multi.mp4</code> (or <code>.webm</code>) next to this page and it will play here automatically.',
-        demo2Tag: 'Multi-GPX + POI',
-        demo2Title: 'Multiple tracks synced in time & chart',
-        demo2Desc: 'Different start and finish times, custom labels moving with dots, shared elevation chart, and colorful tactical POI markers.',
-        howTitle: 'How to create a video in 3 steps',
-        howSub: 'The whole process takes just seconds and requires no extra software.',
-        step1Title: 'Upload one or more GPX files',
-        step1Desc: 'Export your track from Veloplanner, Strava, Garmin, or Komoot and drop it here. Add more tracks using the <strong>Add another GPX</strong> button.',
-        step2Title: 'Customize map, colors & POIs',
-        step2Desc: 'Pick a map style (OpenStreetMap, Dark Mode, Topo 3D), choose a YouTube/Reels aspect ratio, rename tracks, and place custom POI markers on the map.',
-        step3Title: 'Click "2. Generate video"',
-        step3Desc: 'The generator preloads map tiles and exports a smooth video file ready to share on social media.',
-        optTitle: 'Available options & features',
-        optSub: 'Everything you need to tailor the animation to your ride or adventure story.',
-        f1Title: '8 map styles',
-        f1Desc: 'Classic OpenStreetMap, custom vector <strong>Dark Mode</strong> without labels, <strong>Topo 3D (Relief)</strong> with mountain shading, CyclOSM, OpenTopoMap, and Satellite.',
-        f2Title: 'GPX time synchronization',
-        f2Desc: 'The animation reads start and end timestamps from each file individually - showing real pace and order along the route.',
-        f3Title: 'Shared elevation chart',
-        f3Desc: 'All route profiles on one chart (distance axis scaled to the longest track), with an option to hide it for maximum map zoom.',
-        f4Title: 'Custom POI markers',
-        f4Desc: 'Import GPX waypoints, place POIs by clicking the map or pasting <code>lat, lon</code> coordinates, customize icons, scale, labels, and chart sync.',
-        f5Title: '16:9, 9:16 & 1:1 formats',
-        f5Desc: 'In vertical 9:16 mode, the legend sits cleanly above the map so it never covers any tracks. Hiding the legend maximizes map zoom.',
-        f6Title: '100% private',
-        f6Desc: 'Your GPX files are processed strictly inside your browser memory on your device. Nothing is stored or sent to external servers.',
-        coffeeTitle: 'Enjoying the tool? Buy me a coffee ☕',
-        coffeeDesc: 'The generator is completely free and ad-free. If it helped you create a cool trip or event recap video, feel free to support development with a virtual coffee.',
-        coffeeBtn: '☕ Support on buycoffee.to',
-        footerTxt: 'GPX Route Animation Generator by Radzio • Runs locally in your browser • ',
-        footerLink: 'Open tool'
+        footerTxt: '© GPX Alive, stworzone przez Radek Piotrowski',
+        footerLink: 'Uruchom GPX Alive',
+        footerAttr: 'Kafelki i dane map: © OpenStreetMap contributors, OpenTopoMap, CyclOSM, OpenFreeMap, Esri.'
       }
     };
 
     function applyLanguage(lang) {
-      const t = I18N[lang] || I18N.pl;
+      const t = I18N[lang] || I18N.en;
       document.documentElement.lang = lang;
       document.title = t.docTitle;
+      const metaDesc = document.querySelector('meta[name="description"]');
+      const ogTitle = document.querySelector('meta[property="og:title"]');
+      const ogDesc = document.querySelector('meta[property="og:description"]');
+      if (metaDesc) metaDesc.setAttribute('content', t.metaDesc);
+      if (ogTitle) ogTitle.setAttribute('content', t.ogTitle);
+      if (ogDesc) ogDesc.setAttribute('content', t.ogDesc);
+
       localStorage.setItem('gpx_anim_lang', lang);
 
       document.querySelectorAll('.lang-btn').forEach((b) => {
@@ -717,8 +885,10 @@
       btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
     });
 
-    const savedLang = localStorage.getItem('gpx_anim_lang') || 'pl';
-    applyLanguage(savedLang === 'en' ? 'en' : 'pl');
+    const urlLang = new URLSearchParams(window.location.search).get('lang');
+    const savedLang = localStorage.getItem('gpx_anim_lang');
+    const initLang = (urlLang === 'pl' || urlLang === 'en') ? urlLang : (savedLang === 'pl' ? 'pl' : 'en');
+    applyLanguage(initLang);
 
     function attachVideoFallback(videoId, fallbackId) {
       const v = document.getElementById(videoId);
