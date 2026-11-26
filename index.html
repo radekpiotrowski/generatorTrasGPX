@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GPX Alive<br />Free GPX to Video Animation Maker</title>
+  <title>GPX Alive</title>
   <meta name="description" content="Free GPX to video animation maker. Upload one or many GPX tracks, add POIs and export 60 FPS videos for Reels, Shorts and YouTube. Runs in your browser." />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="GPX Alive" />
@@ -712,11 +712,11 @@
   <script>
     const I18N = {
       en: {
-        docTitle: 'GPX Alive – Free GPX to Video Animation Maker',
+        docTitle: 'GPX Alive',
         metaDesc: 'Free GPX to video animation maker. Upload one or many GPX tracks, add POIs and export 60 FPS videos for Reels, Shorts and YouTube. Runs in your browser.',
         ogTitle: 'GPX Alive – Turn GPX Tracks into Video Animations',
         ogDesc: 'Animate your route on a map, compare multiple tracks side by side and export ready-to-post video. Free, no sign-up, 100% private.',
-        brandName: 'GPX Alive – GPX to Video Animation Maker',
+        brandName: 'GPX Alive',
         navDemo: 'Examples',
         navHow: 'How it works',
         navOptions: 'Features',
@@ -783,11 +783,11 @@
         footerAttr: 'Map tiles & data: © OpenStreetMap contributors, OpenTopoMap, CyclOSM, OpenFreeMap, Esri.'
       },
       pl: {
-        docTitle: 'GPX Alive – generator animacji tras GPX',
+        docTitle: 'GPX Alive',
         metaDesc: 'Darmowy generator animacji tras GPX. Wgraj jeden lub wiele śladów, dodaj POI i pobierz wideo 60 FPS na Reels, Shorts i YouTube. Działa w przeglądarce.',
         ogTitle: 'GPX Alive – zamień ślad GPX w animację wideo',
         ogDesc: 'Animuj trasę na mapie, porównaj kilka przejazdów naraz i pobierz gotowe wideo. Za darmo, bez logowania, 100% prywatnie.',
-        brandName: 'GPX Alive - zamień ślad GPX w wideo',
+        brandName: 'GPX Alive',
         navDemo: 'Przykłady',
         navHow: 'Jak to działa',
         navOptions: 'Funkcje',
@@ -886,8 +886,11 @@
     });
 
     const urlLang = new URLSearchParams(window.location.search).get('lang');
-    const savedLang = localStorage.getItem('gpx_anim_lang');
-    const initLang = (urlLang === 'pl' || urlLang === 'en') ? urlLang : (savedLang === 'pl' ? 'pl' : 'en');
+    const browserLangs = (navigator.languages && navigator.languages.length)
+      ? navigator.languages
+      : [navigator.language || navigator.userLanguage || 'en'];
+    const browserIsPolish = browserLangs.some((lang) => String(lang).toLowerCase().startsWith('pl'));
+    const initLang = (urlLang === 'pl' || urlLang === 'en') ? urlLang : (browserIsPolish ? 'pl' : 'en');
     applyLanguage(initLang);
 
     function attachVideoFallback(videoId, fallbackId) {

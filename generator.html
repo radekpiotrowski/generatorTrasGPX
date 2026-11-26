@@ -59,7 +59,7 @@
       align-items: center;
     }
     .action-footer {
-      padding-top: 4px;
+      padding-top: 6px;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
@@ -309,6 +309,7 @@
       border-radius: 9px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       cursor: pointer;
+      white-space: nowrap;
     }
     label.field input[type="checkbox"] {
       accent-color: #f97316;
@@ -557,7 +558,6 @@
     <div class="section-label"><span data-i18n="secPois">POI Markers</span></div>
     <div class="pois-grid" id="poisGrid"></div>
 
-    <!-- Pasek akcji po sekcji z POI -->
     <div class="action-footer">
       <button class="action" id="pauseBtn" disabled data-i18n="btnPause">⏸ Pause</button>
       <button class="action primary" id="recordBtn" disabled data-i18n="btnGenerate">Generate video</button>
@@ -729,9 +729,17 @@
       }
     };
 
-    const urlLang = new URLSearchParams(window.location.search).get('lang');
-    const savedLang = localStorage.getItem('gpx_anim_lang');
-    let currentLang = (urlLang === 'pl' || urlLang === 'en') ? urlLang : (savedLang === 'pl' ? 'pl' : 'en');
+    function detectInitialLang() {
+      const urlLang = new URLSearchParams(window.location.search).get('lang');
+      if (urlLang === 'pl' || urlLang === 'en') return urlLang;
+
+      const langs = (navigator.languages && navigator.languages.length)
+        ? navigator.languages
+        : [navigator.language || navigator.userLanguage || 'en'];
+      return langs.some((l) => String(l).toLowerCase().startsWith('pl')) ? 'pl' : 'en';
+    }
+
+    let currentLang = detectInitialLang();
     const tr = () => I18N[currentLang];
 
     const BASIC_COLORS = [
@@ -970,9 +978,9 @@
       pauseBtn.classList.toggle('active-mode', isPaused);
     }
 
-    function applyLanguage(lang) {
+    function applyLanguage(lang, saveChoice = false) {
       currentLang = lang === 'pl' ? 'pl' : 'en';
-      localStorage.setItem('gpx_anim_lang', currentLang);
+      if (saveChoice) localStorage.setItem('gpx_anim_lang', currentLang);
       document.documentElement.lang = currentLang;
       const t = tr();
       document.title = t.docTitle;
@@ -996,7 +1004,7 @@
     }
 
     document.querySelectorAll('.lang-btn').forEach((btn) => {
-      btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+      btn.addEventListener('click', () => applyLanguage(btn.dataset.lang, true));
     });
 
     function getDurationMs() {
@@ -1681,7 +1689,6 @@
         poisGrid.appendChild(card);
       });
 
-      // Przeniesiony przycisk "Dodaj POI klikając na mapie" w sekcji POI
       const addPoiMapBtn = document.createElement('button');
       addPoiMapBtn.type = 'button';
       addPoiMapBtn.className = 'add-slot-btn poi-add' + (mapPickMode === 'add' ? ' active-mode' : '');
@@ -1693,7 +1700,6 @@
       });
       poisGrid.appendChild(addPoiMapBtn);
 
-      // Guzik obok: "Dodaj POI (lub wpisz lat, lon)" bez zmian
       const addPoiBtn = document.createElement('button');
       addPoiBtn.type = 'button';
       addPoiBtn.className = 'add-slot-btn poi-add';
