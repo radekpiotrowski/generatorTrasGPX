@@ -8,6 +8,7 @@
   <meta name="description" content="Free GPX to video animation maker. Upload one or many GPX tracks, add POIs and export 60 FPS videos for Reels, Shorts and YouTube. Runs in your browser." />
   <link rel="icon" type="image/svg+xml" href="./logo.svg" />
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
     :root {
       --bg: #0b1311;
@@ -98,11 +99,20 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .section-hint {
+      font-size: 10.5px;
+      font-weight: 500;
+      text-transform: none;
+      letter-spacing: 0;
+      opacity: 0.8;
     }
 
     .slots-grid, .pois-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
       gap: 7px;
       width: 100%;
     }
@@ -117,15 +127,27 @@
       gap: 5px;
       min-height: 70px;
       justify-content: center;
+      transition: border-color 0.15s ease, opacity 0.15s ease, background 0.15s ease;
+    }
+    .slot-card.dragging {
+      opacity: 0.4;
+    }
+    .slot-card.drag-over {
+      border-color: #f97316;
+      background: rgba(249, 115, 22, 0.14);
+      box-shadow: 0 0 0 1px #f97316;
     }
     .slot-card.empty {
       border-style: dashed;
-      border-color: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.22);
       align-items: center;
+      text-align: center;
+      padding: 10px 22px 10px 10px;
       cursor: pointer;
       color: var(--muted);
       font-size: 12px;
       font-weight: 600;
+      line-height: 1.35;
       transition: background 0.15s ease, border-color 0.15s ease;
     }
     .slot-card.empty:hover {
@@ -147,6 +169,17 @@
       cursor: pointer;
     }
     .empty-remove:hover { color: #fff; background: rgba(255, 255, 255, 0.2); }
+
+    .drag-handle {
+      cursor: grab;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1;
+      padding: 2px 3px 2px 0;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .drag-handle:active { cursor: grabbing; }
 
     .add-slot-btn {
       appearance: none;
@@ -397,6 +430,7 @@
       position: relative;
       width: 100%;
       max-width: 1260px;
+      min-height: 290px;
       border-radius: 18px;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.12);
@@ -404,6 +438,15 @@
       background: #0f1916;
       display: flex;
       justify-content: center;
+      align-items: center;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .stage-wrap.loaded {
+      min-height: 0;
+    }
+    .stage-wrap.file-drag-over {
+      border-color: #f97316;
+      box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.45);
     }
     canvas {
       position: relative;
@@ -421,22 +464,42 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(11, 19, 17, 0.88);
+      background: rgba(11, 19, 17, 0.90);
       text-align: center;
-      padding: 24px;
+      padding: 16px;
       cursor: pointer;
       transition: opacity 0.25s ease;
     }
     .drop-overlay.hidden { opacity: 0; pointer-events: none; }
     .drop-box {
       border: 2px dashed rgba(249, 115, 22, 0.65);
-      border-radius: 18px;
-      padding: 40px 48px;
+      border-radius: 16px;
+      padding: 28px 34px;
       max-width: 580px;
+      width: 100%;
+      max-height: 100%;
+      overflow-y: auto;
       background: rgba(249, 115, 22, 0.07);
     }
-    .drop-box h2 { margin: 0 0 8px; font-size: 21px; }
-    .drop-box p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.55; }
+    .drop-box h2 {
+      margin: 0 0 8px;
+      font-size: clamp(16px, 3.6vw, 21px);
+      line-height: 1.3;
+    }
+    .drop-box p {
+      margin: 0;
+      font-size: clamp(12.5px, 3vw, 14px);
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 10px; gap: 10px; }
+      .toolbar { padding: 12px; }
+      .stage-wrap { min-height: 260px; }
+      .drop-overlay { padding: 12px; }
+      .drop-box { padding: 18px 14px; }
+    }
 
     #mlMapWrap {
       position: absolute;
@@ -475,19 +538,19 @@
     <div class="row">
       <div class="title">
         <strong data-i18n="appTitle">GPX Alive – GPX to Video Animation Maker</strong>
-        <span class="status" id="statusText">Step 1: Upload a .gpx file or click "Add another GPX" to add more slots.</span>
+        <span class="status" id="statusText">Step 1: Add GPX files (single, multiple, or .zip).</span>
       </div>
       <div class="controls">
         <div class="lang-switch" role="group" aria-label="Language">
           <button type="button" class="lang-btn active" data-lang="en">EN</button>
           <button type="button" class="lang-btn" data-lang="pl">PL</button>
         </div>
-        <input id="fileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" multiple />
-        <input id="slotFileInput" type="file" accept=".gpx,application/gpx+xml,text/xml" />
+        <input id="fileInput" type="file" accept=".gpx,.zip,application/gpx+xml,application/zip,text/xml" multiple />
+        <input id="slotFileInput" type="file" accept=".gpx,.zip,application/gpx+xml,application/zip,text/xml" multiple />
       </div>
     </div>
 
-    <!-- Wiersz 1 ustawień: mapa, format, czas -->
+    <!-- Wiersz 1 ustawień -->
     <div class="row">
       <div class="inputs">
         <label class="field"><span data-i18n="lblMap">Map:</span>
@@ -521,7 +584,7 @@
       </div>
     </div>
 
-    <!-- Wiersz 2 ustawień: wszystkie checkboxy widoczności w jednym wierszu na desktopie -->
+    <!-- Wiersz 2 ustawień: wszystkie checkboxy w jednej linii na desktopie -->
     <div class="row">
       <div class="inputs">
         <label class="field">
@@ -531,6 +594,10 @@
         <label class="field">
           <input id="inShowLegend" type="checkbox" checked />
           <span data-i18n="lblLegend">Legend</span>
+        </label>
+        <label class="field">
+          <input id="inMultiDay" type="checkbox" />
+          <span data-i18n="lblMultiDay">Multi-day trip</span>
         </label>
         <label class="field">
           <input id="inShowPoi" type="checkbox" checked />
@@ -552,12 +619,16 @@
       </div>
     </div>
 
-    <div class="section-label"><span data-i18n="secTracks">GPX Tracks</span></div>
+    <div class="section-label">
+      <span data-i18n="secTracks">GPX Tracks</span>
+      <span class="section-hint" data-i18n="secTracksHint">Drag cards (⋮⋮) to reorder tracks</span>
+    </div>
     <div class="slots-grid" id="slotsGrid"></div>
 
     <div class="section-label"><span data-i18n="secPois">POI Markers</span></div>
     <div class="pois-grid" id="poisGrid"></div>
 
+    <!-- Przyciski akcji pod sekcją POI -->
     <div class="action-footer">
       <button class="action" id="pauseBtn" disabled data-i18n="btnPause">⏸ Pause</button>
       <button class="action primary" id="recordBtn" disabled data-i18n="btnGenerate">Generate video</button>
@@ -570,8 +641,8 @@
     <canvas id="canvas" width="1600" height="900"></canvas>
     <div class="drop-overlay" id="dropOverlay">
       <div class="drop-box">
-        <h2 data-i18n="dropTitle">1. Drop .gpx files</h2>
-        <p data-i18n-html="dropSub">Drag &amp; drop <b>.gpx</b> files here or add more fields with <b>Add another GPX</b>.<br>You can also add custom <b>POI</b> markers by clicking on the map or entering coordinates.</p>
+        <h2 data-i18n="dropTitle">Add GPX, you can add multiple or a ZIP</h2>
+        <p data-i18n-html="dropSub">Click here or drag &amp; drop single <b>.gpx</b> files, multiple tracks, or a <b>.zip</b> archive.<br>You can also add custom <b>POI</b> markers on the map.</p>
       </div>
     </div>
   </div>
@@ -606,6 +677,7 @@
     const inDuration = document.getElementById('inDuration');
     const inShowElev = document.getElementById('inShowElev');
     const inShowLegend = document.getElementById('inShowLegend');
+    const inMultiDay = document.getElementById('inMultiDay');
     const inShowPoi = document.getElementById('inShowPoi');
     const inShowPoiLabels = document.getElementById('inShowPoiLabels');
     const inPoiScale = document.getElementById('inPoiScale');
@@ -635,25 +707,28 @@
         lblDur: 'Duration (s):',
         lblElev: 'Elevation chart',
         lblLegend: 'Legend',
+        lblMultiDay: 'Multi-day trip',
         lblPois: 'POI markers',
         lblPoiLabels: 'POI labels',
         lblPoiSize: 'POI size:',
         lblPoiOnElev: 'POI on chart',
         secTracks: 'GPX Tracks',
+        secTracksHint: 'Drag cards (⋮⋮) to reorder tracks',
         secPois: 'POI Markers',
-        dropTitle: '1. Drop .gpx files',
-        dropSub: 'Drag & drop <b>.gpx</b> files here or add more fields with <b>Add another GPX</b>.<br>You can also add custom <b>POI</b> markers by clicking on the map or entering coordinates.',
-        statusInit: 'Step 1: Upload a .gpx file or click "Add another GPX" to add more slots.',
-        statusLoaded: (n, poiTxt, maxKm) => `Loaded ${n} track(s)${poiTxt} • Longest: ${maxKm} km - click "Generate video".`,
+        dropTitle: 'Add GPX, you can add multiple or a ZIP',
+        dropSub: 'Click here or drag &amp; drop single <b>.gpx</b> files, multiple tracks, or a <b>.zip</b> archive.<br>You can also add custom <b>POI</b> markers on the map.',
+        statusInit: 'Step 1: Add GPX files (you can add multiple or a ZIP).',
+        statusLoaded: (n, poiTxt, maxKm) => `Loaded ${n} track(s)${poiTxt} • ${inMultiDay.checked ? 'Trip sum' : 'Longest'}: ${maxKm} km - click "Generate video".`,
         statusPickAdd: 'Add POI mode: click anywhere on the map (press Esc or click "📍 Add POI by clicking map" to finish).',
         statusPickMove: 'Click on the map to move the selected POI marker (Esc = cancel).',
         statusOsmBlocked: 'Local preview without Referer header (OSM 403) - OpenStreetMap works on GitHub Pages; locally choose Dark Mode or Topo.',
-        slotAddN: (n) => `Add GPX #${n}`,
+        slotAddFirst: 'Add GPX, you can add multiple or a ZIP',
         slotAddNext: 'Add another GPX',
         poiAddBtn: 'Add POI (or enter lat, lon)',
         poiIcons: { diamond: '◆ Diamond', pin: '📍 Pin', flag: '⚑ Flag', target: '⌖ Target', dot: '● Dot' },
         hudHour: 'Time',
         hudElapsed: 'Elapsed',
+        hudDay: 'Day',
         hudWait: ' (waiting)',
         recFetch: 'Loading map tiles...',
         recPrep: 'Preparing map tiles before recording...',
@@ -667,6 +742,8 @@
         tipDelPoi: 'Delete POI marker',
         tipName: 'Enter custom name (shown in legend and next to the dot)',
         tipCoord: 'Paste coordinates (lat, lon) e.g. from Google Maps',
+        alertNeedTwoGpx: 'The "Multi-day trip" option requires at least 2 GPX files.',
+        zipEmpty: 'No .gpx files found inside the selected ZIP archive.',
         footerTxt: '© GPX Alive, created by Radek Piotrowski',
         footerHome: 'Home'
       },
@@ -692,25 +769,28 @@
         lblDur: 'Czas (s):',
         lblElev: 'Wykres wysokości',
         lblLegend: 'Legenda',
+        lblMultiDay: 'Trip wielodniowy',
         lblPois: 'Punkty POI',
         lblPoiLabels: 'Etykiety POI',
         lblPoiSize: 'Rozmiar POI:',
         lblPoiOnElev: 'POI na wykresie',
         secTracks: 'Trasy GPX',
+        secTracksHint: 'Przeciągnij karty (⋮⋮), aby zmienić kolejność',
         secPois: 'Punkty POI',
-        dropTitle: '1. Wrzuć pliki .gpx',
-        dropSub: 'Przeciągnij tutaj pliki <b>.gpx</b> albo dodawaj kolejne pola przyciskiem <b>Dodaj kolejny GPX</b>.<br>Możesz też dodawać własne punkty <b>POI</b> klikając w mapę lub wpisując współrzędne.',
-        statusInit: 'Krok 1: Wgraj plik .gpx lub kliknij „Dodaj kolejny GPX”, aby dodać kolejne pola.',
-        statusLoaded: (n, poiTxt, maxKm) => `Załadowano ${n} tras${poiTxt} • Najdłuższa: ${maxKm} km - kliknij „Generuj video”.`,
+        dropTitle: 'Dodaj GPX, możesz dodać więcej niż jeden lub zip',
+        dropSub: 'Kliknij tutaj albo przeciągnij pliki <b>.gpx</b>, kilka tras naraz lub archiwum <b>.zip</b>.<br>Możesz też dodawać własne punkty <b>POI</b> na mapie.',
+        statusInit: 'Krok 1: Dodaj GPX (możesz dodać więcej niż jeden lub zip).',
+        statusLoaded: (n, poiTxt, maxKm) => `Załadowano ${n} tras${poiTxt} • ${inMultiDay.checked ? 'Suma tripa' : 'Najdłuższa'}: ${maxKm} km - kliknij „Generuj video”.`,
         statusPickAdd: 'Tryb dodawania POI: kliknij wybrane miejsce na mapie (Esc lub kliknij „📍 Dodaj POI klikając na mapie”, aby zakończyć).',
         statusPickMove: 'Kliknij na mapę, aby przenieść wybrany punkt POI w nowe miejsce (Esc = anuluj).',
         statusOsmBlocked: 'Podgląd lokalny bez nagłówka Referer (OSM 403) - na GitHub Pages OpenStreetMap zadziała, a lokalnie możesz wybrać Dark Mode lub Topo.',
-        slotAddN: (n) => `Dodaj GPX #${n}`,
+        slotAddFirst: 'Dodaj GPX, możesz dodać więcej niż jeden lub zip',
         slotAddNext: 'Dodaj kolejny GPX',
         poiAddBtn: 'Dodaj POI (lub wpisz lat, lon)',
         poiIcons: { diamond: '◆ Romb', pin: '📍 Pinezka', flag: '⚑ Flaga', target: '⌖ Cel', dot: '● Kropka' },
         hudHour: 'Godzina',
         hudElapsed: 'Czas',
+        hudDay: 'Dzień',
         hudWait: ' (czeka)',
         recFetch: 'Pobieranie kafelków mapy...',
         recPrep: 'Przygotowywanie kafelków mapy przed nagraniem...',
@@ -724,6 +804,8 @@
         tipDelPoi: 'Usuń punkt POI',
         tipName: 'Wpisz własną nazwę (widoczną w legendzie i przy kropce)',
         tipCoord: 'Wklej współrzędne (lat, lon) np. z Google Maps',
+        alertNeedTwoGpx: 'Opcja „Trip wielodniowy” wymaga wgrania co najmniej 2 plików GPX.',
+        zipEmpty: 'W wybranym archiwum ZIP nie znaleziono plików .gpx.',
         footerTxt: '© GPX Alive, stworzone przez Radek Piotrowski',
         footerHome: 'Strona główna'
       }
@@ -732,6 +814,9 @@
     function detectInitialLang() {
       const urlLang = new URLSearchParams(window.location.search).get('lang');
       if (urlLang === 'pl' || urlLang === 'en') return urlLang;
+
+      const saved = localStorage.getItem('gpx_anim_lang');
+      if (saved === 'pl' || saved === 'en') return saved;
 
       const langs = (navigator.languages && navigator.languages.length)
         ? navigator.languages
@@ -934,6 +1019,7 @@
 
     const slots = [createSlot(0)];
     let pendingSlotIndex = 0;
+    let dragSrcSlotIndex = null;
 
     let pois = [];
     let nextPoiId = 1;
@@ -971,6 +1057,84 @@
     tileCheckCanvas.width = 256;
     tileCheckCanvas.height = 256;
     const tileCheckCtx = tileCheckCanvas.getContext('2d', { willReadFrequently: true });
+
+    const wmCache = { height: 0, canvas: null };
+
+    function getWatermarkCanvas(badgeH) {
+      const h = Math.max(26, Math.round(badgeH));
+      if (wmCache.canvas && wmCache.height === h) return wmCache.canvas;
+
+      const tmp = document.createElement('canvas');
+      const tCtx = tmp.getContext('2d');
+
+      const padX = Math.round(h * 0.24);
+      const iconSize = Math.round(h * 0.66);
+      const gap = Math.round(h * 0.24);
+      const fontSize = Math.round(h * 0.44);
+
+      tCtx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+      const textW = tCtx.measureText('GPX Alive').width;
+      const badgeW = Math.round(padX + iconSize + gap + textW + padX * 1.25);
+      const radius = Math.round(h * 0.26);
+
+      tmp.width = badgeW + 4;
+      tmp.height = h + 4;
+      const ox = 2, oy = 2;
+
+      tCtx.fillStyle = 'rgba(11, 19, 17, 0.88)';
+      tCtx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+      tCtx.lineWidth = 1.4;
+      tCtx.beginPath();
+      tCtx.roundRect(ox, oy, badgeW, h, radius);
+      tCtx.fill();
+      tCtx.stroke();
+
+      const ix = ox + padX;
+      const iy = oy + (h - iconSize) / 2;
+      const grad = tCtx.createLinearGradient(ix, iy, ix + iconSize, iy + iconSize);
+      grad.addColorStop(0, '#fb923c');
+      grad.addColorStop(1, '#ea580c');
+
+      tCtx.fillStyle = grad;
+      tCtx.beginPath();
+      tCtx.roundRect(ix, iy, iconSize, iconSize, iconSize * 0.25);
+      tCtx.fill();
+
+      tCtx.strokeStyle = '#ffffff';
+      tCtx.lineWidth = iconSize * 0.09;
+      tCtx.lineCap = 'round';
+      tCtx.beginPath();
+      tCtx.moveTo(ix + iconSize * 0.25, iy + iconSize * 0.72);
+      tCtx.bezierCurveTo(
+        ix + iconSize * 0.25, iy + iconSize * 0.47,
+        ix + iconSize * 0.72, iy + iconSize * 0.59,
+        ix + iconSize * 0.73, iy + iconSize * 0.30
+      );
+      tCtx.stroke();
+
+      tCtx.fillStyle = '#ffffff';
+      tCtx.beginPath();
+      tCtx.arc(ix + iconSize * 0.25, iy + iconSize * 0.72, iconSize * 0.072, 0, Math.PI * 2);
+      tCtx.fill();
+
+      tCtx.fillStyle = '#0f1b18';
+      tCtx.strokeStyle = '#ffffff';
+      tCtx.lineWidth = iconSize * 0.062;
+      tCtx.beginPath();
+      tCtx.arc(ix + iconSize * 0.73, iy + iconSize * 0.30, iconSize * 0.105, 0, Math.PI * 2);
+      tCtx.fill();
+      tCtx.stroke();
+
+      tCtx.font = `800 ${fontSize}px Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+      tCtx.fillStyle = '#ffffff';
+      tCtx.textAlign = 'left';
+      tCtx.textBaseline = 'middle';
+      tCtx.fillText('GPX Alive', ix + iconSize + gap, oy + h / 2 + 0.5);
+
+      wmCache.height = h;
+      wmCache.canvas = tmp;
+      return tmp;
+    }
 
     function updatePauseBtnUI() {
       const t = tr();
@@ -1274,6 +1438,7 @@
         durationMs,
         simStartMs: 0,
         simEndMs: durationMs,
+        multiDayKmOffset: 0,
         isLoop
       };
     }
@@ -1346,9 +1511,24 @@
       const active = getActiveSlots();
       if (active.length === 0) return;
 
-      globalMaxKm = Math.max(0.1, ...active.map((s) => s.track.totalKm));
-      globalHasElevation = active.some((s) => s.track.hasEle);
+      if (inMultiDay.checked && active.length < 2) {
+        inMultiDay.checked = false;
+      }
+      const isMultiDay = inMultiDay.checked && active.length >= 2;
 
+      if (isMultiDay) {
+        let kmAcc = 0;
+        for (const s of active) {
+          s.track.multiDayKmOffset = kmAcc;
+          kmAcc += s.track.totalKm;
+        }
+        globalMaxKm = Math.max(0.1, kmAcc);
+      } else {
+        for (const s of active) s.track.multiDayKmOffset = 0;
+        globalMaxKm = Math.max(0.1, ...active.map((s) => s.track.totalKm));
+      }
+
+      globalHasElevation = active.some((s) => s.track.hasEle);
       if (globalHasElevation) {
         const eleTracks = active.filter((s) => s.track.hasEle);
         globalMinEle = Math.min(...eleTracks.map((s) => s.track.minEle));
@@ -1356,47 +1536,58 @@
         if (globalMaxEle - globalMinEle < 10) globalMaxEle = globalMinEle + 20;
       }
 
-      const mode = inTimeSync.value;
-      const realTracks = active.filter((s) => s.track.hasRealTime);
+      if (isMultiDay) {
+        // Odtwarzanie sekwencyjne: #1, potem #2, itd. do ostatniego
+        useClockLabels = false;
+        let tAcc = 0;
+        for (const s of active) {
+          s.track.simStartMs = tAcc;
+          s.track.simEndMs = tAcc + s.track.durationMs;
+          tAcc = s.track.simEndMs;
+        }
+      } else {
+        const mode = inTimeSync.value;
+        const realTracks = active.filter((s) => s.track.hasRealTime);
 
-      if (mode === 'clock' && realTracks.length > 0) {
-        const minReal = Math.min(...realTracks.map((s) => s.track.rawStartMs));
-        const maxReal = Math.max(...realTracks.map((s) => s.track.rawEndMs));
-        const samePeriod = (maxReal - minReal) <= 36 * 3600 * 1000;
+        if (mode === 'clock' && realTracks.length > 0) {
+          const minReal = Math.min(...realTracks.map((s) => s.track.rawStartMs));
+          const maxReal = Math.max(...realTracks.map((s) => s.track.rawEndMs));
+          const samePeriod = (maxReal - minReal) <= 36 * 3600 * 1000;
 
-        if (samePeriod) {
-          useClockLabels = 'epoch';
-          for (const s of active) {
-            if (s.track.hasRealTime) {
-              s.track.simStartMs = s.track.rawStartMs;
-              s.track.simEndMs = s.track.rawEndMs;
-            } else {
-              s.track.simStartMs = minReal;
-              s.track.simEndMs = minReal + s.track.durationMs;
+          if (samePeriod) {
+            useClockLabels = 'epoch';
+            for (const s of active) {
+              if (s.track.hasRealTime) {
+                s.track.simStartMs = s.track.rawStartMs;
+                s.track.simEndMs = s.track.rawEndMs;
+              } else {
+                s.track.simStartMs = minReal;
+                s.track.simEndMs = minReal + s.track.durationMs;
+              }
+            }
+          } else {
+            useClockLabels = 'timeOfDay';
+            let earliestDayMs = Infinity;
+            for (const s of realTracks) {
+              const d = new Date(s.track.rawStartMs);
+              const msOfDay = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
+              s.track.simStartMs = msOfDay;
+              s.track.simEndMs = msOfDay + s.track.durationMs;
+              if (msOfDay < earliestDayMs) earliestDayMs = msOfDay;
+            }
+            for (const s of active) {
+              if (!s.track.hasRealTime) {
+                s.track.simStartMs = earliestDayMs;
+                s.track.simEndMs = earliestDayMs + s.track.durationMs;
+              }
             }
           }
         } else {
-          useClockLabels = 'timeOfDay';
-          let earliestDayMs = Infinity;
-          for (const s of realTracks) {
-            const d = new Date(s.track.rawStartMs);
-            const msOfDay = (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 + d.getMilliseconds();
-            s.track.simStartMs = msOfDay;
-            s.track.simEndMs = msOfDay + s.track.durationMs;
-            if (msOfDay < earliestDayMs) earliestDayMs = msOfDay;
-          }
+          useClockLabels = false;
           for (const s of active) {
-            if (!s.track.hasRealTime) {
-              s.track.simStartMs = earliestDayMs;
-              s.track.simEndMs = earliestDayMs + s.track.durationMs;
-            }
+            s.track.simStartMs = 0;
+            s.track.simEndMs = s.track.durationMs;
           }
-        }
-      } else {
-        useClockLabels = false;
-        for (const s of active) {
-          s.track.simStartMs = 0;
-          s.track.simEndMs = s.track.durationMs;
         }
       }
 
@@ -1423,6 +1614,28 @@
       }
     }
 
+    function reorderSlots(fromIdx, toIdx) {
+      if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0 || fromIdx >= slots.length || toIdx >= slots.length) return;
+      const [moved] = slots.splice(fromIdx, 1);
+      slots.splice(toIdx, 0, moved);
+
+      // Aktualizuj powiązanie sourceSlot dla wczytanych POI z GPX
+      for (const p of pois) {
+        if (p.sourceSlot === null) continue;
+        if (p.sourceSlot === fromIdx) {
+          p.sourceSlot = toIdx;
+        } else if (fromIdx < toIdx && p.sourceSlot > fromIdx && p.sourceSlot <= toIdx) {
+          p.sourceSlot--;
+        } else if (fromIdx > toIdx && p.sourceSlot >= toIdx && p.sourceSlot < fromIdx) {
+          p.sourceSlot++;
+        }
+      }
+
+      renderSlotsUI();
+      recomputeGlobalTimeline();
+      startAnimation();
+    }
+
     function renderSlotsUI() {
       const t = tr();
       slotsGrid.innerHTML = '';
@@ -1430,7 +1643,7 @@
         const card = document.createElement('div');
         if (!slot.track) {
           card.className = 'slot-card empty';
-          card.innerHTML = `<span>${t.slotAddN(idx + 1)}</span>`;
+          card.innerHTML = `<span>${t.slotAddFirst}</span>`;
           if (slots.length > 1) {
             const remBtn = document.createElement('button');
             remBtn.type = 'button';
@@ -1449,21 +1662,69 @@
             slotFileInput.value = '';
             slotFileInput.click();
           });
-          card.addEventListener('dragover', (e) => e.preventDefault());
+          card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            card.classList.add('drag-over');
+          });
+          card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
           card.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (e.dataTransfer.files[0]) loadFilesIntoSlots([e.dataTransfer.files[0]], idx);
+            card.classList.remove('drag-over');
+            if (dragSrcSlotIndex !== null) {
+              const src = dragSrcSlotIndex;
+              dragSrcSlotIndex = null;
+              reorderSlots(src, idx);
+            } else if (e.dataTransfer.files.length) {
+              loadFilesIntoSlots(e.dataTransfer.files, idx);
+            }
           });
         } else {
           const trk = slot.track;
           card.className = 'slot-card';
+          card.draggable = true;
+
+          card.addEventListener('dragstart', (e) => {
+            dragSrcSlotIndex = idx;
+            card.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(idx));
+          });
+          card.addEventListener('dragend', () => {
+            dragSrcSlotIndex = null;
+            card.classList.remove('dragging');
+            slotsGrid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+          });
+          card.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (dragSrcSlotIndex !== null && dragSrcSlotIndex !== idx) {
+              card.classList.add('drag-over');
+            }
+          });
+          card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+          card.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            card.classList.remove('drag-over');
+            if (dragSrcSlotIndex !== null) {
+              const src = dragSrcSlotIndex;
+              dragSrcSlotIndex = null;
+              reorderSlots(src, idx);
+            } else if (e.dataTransfer.files.length) {
+              loadFilesIntoSlots(e.dataTransfer.files, idx);
+            }
+          });
 
           const head = document.createElement('div');
           head.className = 'slot-head';
 
           const nameWrap = document.createElement('div');
           nameWrap.className = 'slot-name-wrap';
+
+          const grip = document.createElement('span');
+          grip.className = 'drag-handle';
+          grip.textContent = '⋮⋮';
+          grip.title = t.secTracksHint;
 
           const dot = document.createElement('span');
           dot.className = 'slot-dot';
@@ -1475,8 +1736,13 @@
           nameInp.value = trk.name;
           nameInp.placeholder = `Track #${idx + 1}`;
           nameInp.title = t.tipName;
+          // Zapobiega przechwytywaniu zaznaczania tekstu przez drag&drop karty
+          nameInp.addEventListener('mousedown', () => { card.draggable = false; });
+          nameInp.addEventListener('blur', () => { card.draggable = true; });
+          nameInp.addEventListener('mouseup', () => { card.draggable = true; });
           nameInp.addEventListener('input', () => { trk.name = nameInp.value; });
 
+          nameWrap.appendChild(grip);
           nameWrap.appendChild(dot);
           nameWrap.appendChild(nameInp);
 
@@ -1528,7 +1794,7 @@
             ? `${formatClockHHMM(trk.rawStartMs)}–${formatClockHHMM(trk.rawEndMs)}`
             : `~${durTxt}`;
           const eleInfo = trk.hasEle ? ` • ↑${Math.round(trk.gain)}m` : '';
-          meta.textContent = `${trk.totalKm.toFixed(1)} km${eleInfo} • ${timeRangeTxt}`;
+          meta.textContent = `#${idx + 1} • ${trk.totalKm.toFixed(1)} km${eleInfo} • ${timeRangeTxt}`;
 
           const palRow = document.createElement('div');
           palRow.className = 'palette-row';
@@ -1716,7 +1982,9 @@
       if (active.length === 0) {
         setPickMode(null);
         isPaused = false;
+        inMultiDay.checked = false;
         updatePauseBtnUI();
+        dropZone.classList.remove('loaded');
         dropOverlay.classList.remove('hidden');
         pauseBtn.disabled = true;
         recordBtn.disabled = true;
@@ -1728,6 +1996,11 @@
         return;
       }
 
+      if (active.length < 2 && inMultiDay.checked) {
+        inMultiDay.checked = false;
+      }
+
+      dropZone.classList.add('loaded');
       dropOverlay.classList.add('hidden');
       pauseBtn.disabled = false;
       recordBtn.disabled = false;
@@ -1738,11 +2011,50 @@
       startAnimation();
     }
 
-    async function loadFilesIntoSlots(fileList, specificSlotIdx = null) {
-      const files = [...fileList].filter((f) => f && f.name.toLowerCase().endsWith('.gpx'));
-      if (!files.length) return;
+    async function extractGpxEntriesFromFiles(fileList) {
+      const entries = [];
+      for (const f of [...fileList]) {
+        if (!f) continue;
+        const low = f.name.toLowerCase();
+        if (low.endsWith('.gpx')) {
+          entries.push({ name: f.name, text: await f.text() });
+        } else if (low.endsWith('.zip')) {
+          if (typeof JSZip === 'undefined') {
+            alert('JSZip failed to load.');
+            continue;
+          }
+          try {
+            const zip = await JSZip.loadAsync(f);
+            const gpxFiles = [];
+            zip.forEach((relPath, zipEntry) => {
+              if (zipEntry.dir) return;
+              const base = relPath.split('/').pop() || '';
+              if (relPath.startsWith('__MACOSX') || base.startsWith('._')) return;
+              if (base.toLowerCase().endsWith('.gpx')) {
+                gpxFiles.push({ relPath, base, zipEntry });
+              }
+            });
+            gpxFiles.sort((a, b) => a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: 'base' }));
+            if (gpxFiles.length === 0) {
+              alert(tr().zipEmpty);
+              continue;
+            }
+            for (const gf of gpxFiles) {
+              entries.push({ name: gf.base, text: await gf.zipEntry.async('text') });
+            }
+          } catch (err) {
+            alert(`ZIP error (${f.name}): ${err.message}`);
+          }
+        }
+      }
+      return entries;
+    }
 
-      for (let i = 0; i < files.length; i++) {
+    async function loadFilesIntoSlots(fileList, specificSlotIdx = null) {
+      const entries = await extractGpxEntriesFromFiles(fileList);
+      if (!entries.length) return;
+
+      for (let i = 0; i < entries.length; i++) {
         let targetIdx = specificSlotIdx !== null && i === 0
           ? specificSlotIdx
           : slots.findIndex((s) => s.track === null);
@@ -1751,8 +2063,7 @@
           targetIdx = slots.length - 1;
         }
         try {
-          const text = await files[i].text();
-          const parsed = parseSingleGPX(text, files[i].name);
+          const parsed = parseSingleGPX(entries[i].text, entries[i].name);
           slots[targetIdx].track = parsed;
 
           pois = pois.filter((p) => p.sourceSlot !== targetIdx);
@@ -1771,1105 +2082,3 @@
             });
           }
         } catch (err) {
-          alert(err.message);
-        }
-      }
-      osmBlockedNotified = false;
-      onTracksChanged();
-    }
-
-    function getMapViewport() {
-      const W = canvas.width;
-      const H = canvas.height;
-      const unitSize = Math.max(W, H);
-      const activeCount = Math.max(1, getActiveSlots().length);
-      const showElev = inShowElev.checked && globalHasElevation;
-      const showLegend = inShowLegend.checked;
-      const isPortrait = H > W;
-
-      let topHudH = 0;
-      if (showLegend && isPortrait) {
-        const cols = activeCount >= 4 ? 2 : 1;
-        const rows = Math.ceil(activeCount / cols);
-        const headerH = Math.round(unitSize * 0.022);
-        const rowH = Math.round(unitSize * 0.021);
-        topHudH = headerH + rows * rowH + 18;
-      }
-
-      const elevH = showElev ? Math.round(H * 0.20) : 0;
-      const mapY = topHudH;
-      const mapW = W;
-      const mapH = Math.max(100, H - topHudH - elevH);
-
-      return { W, H, unitSize, isPortrait, mapX: 0, mapY, mapW, mapH, topHudH, elevH, showElev, showLegend };
-    }
-
-    function getFloatingHudDimensions(W, unitSize, count) {
-      const compact = count > 5;
-      const pad = W * 0.016;
-      const boxW = Math.min(W * 0.45, unitSize * 0.27);
-      const headerH = unitSize * (compact ? 0.020 : 0.024);
-      const rowH = unitSize * (compact ? 0.0195 : 0.025);
-      const boxH = headerH + count * rowH + 10;
-      return { pad, boxW, boxH, headerH, rowH, compact };
-    }
-
-    function computeOverviewCamera() {
-      const active = getActiveSlots();
-      if (!active.length) return;
-
-      let minWx = Infinity, maxWx = -Infinity, minWy = Infinity, maxWy = -Infinity;
-      for (const s of active) {
-        for (const p of s.track.pts) {
-          if (p.wx < minWx) minWx = p.wx;
-          if (p.wx > maxWx) maxWx = p.wx;
-          if (p.wy < minWy) minWy = p.wy;
-          if (p.wy > maxWy) maxWy = p.wy;
-        }
-      }
-
-      const { mapY, mapW, mapH, unitSize, isPortrait, showLegend } = getMapViewport();
-      const spanX = Math.max(1e-5, maxWx - minWx);
-      const spanY = Math.max(1e-5, maxWy - minWy);
-      const midWx = (minWx + maxWx) / 2;
-      const midWy = (minWy + maxWy) / 2;
-      const maxZ = MAP_PROVIDERS[inMapStyle.value].maxZ;
-
-      if (!showLegend) {
-        const zx = Math.log2((mapW * 0.90) / (spanX * 256));
-        const zy = Math.log2((mapH * 0.88) / (spanY * 256));
-        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
-        overviewCam = { wx: midWx, wy: midWy, z };
-        return;
-      }
-
-      if (isPortrait) {
-        const zx = Math.log2((mapW * 0.86) / (spanX * 256));
-        const zy = Math.log2((mapH * 0.84) / (spanY * 256));
-        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
-        overviewCam = { wx: midWx, wy: midWy, z };
-        return;
-      }
-
-      const hud = getFloatingHudDimensions(mapW, unitSize, active.length);
-      const mPad = Math.max(24, mapW * 0.03);
-
-      const areaA = {
-        x0: mPad, x1: mapW - mPad,
-        y0: mapY + hud.pad + hud.boxH + 18, y1: mapY + mapH - mPad
-      };
-      const areaB = {
-        x0: mPad, x1: mapW - hud.pad - hud.boxW - 18,
-        y0: mapY + mPad, y1: mapY + mapH - mPad
-      };
-
-      const fitInArea = (area) => {
-        const aw = Math.max(120, area.x1 - area.x0);
-        const ah = Math.max(120, area.y1 - area.y0);
-        const zx = Math.log2((aw * 0.90) / (spanX * 256));
-        const zy = Math.log2((ah * 0.88) / (spanY * 256));
-        const z = Math.max(2, Math.min(maxZ - 0.5, Math.min(zx, zy)));
-        const pxScale = Math.pow(2, z) * 256;
-        const safeCx = (area.x0 + area.x1) / 2;
-        const safeCy = (area.y0 + area.y1) / 2;
-        const wx = midWx - (safeCx - mapW / 2) / pxScale;
-        const wy = midWy - (safeCy - (mapY + mapH / 2)) / pxScale;
-        return { wx, wy, z };
-      };
-
-      const camA = fitInArea(areaA);
-      const camB = fitInArea(areaB);
-      overviewCam = camA.z >= camB.z ? camA : camB;
-    }
-
-    function requestTile(styleKey, z, tx, ty, isOverlay = false) {
-      const maxTile = 1 << z;
-      if (ty < 0 || ty >= maxTile) return null;
-      const wx = ((tx % maxTile) + maxTile) % maxTile;
-      const key = `${styleKey}${isOverlay ? '_ov' : ''}/${z}/${wx}/${ty}`;
-
-      const existing = tileCache.get(key);
-      if (existing) return existing;
-
-      const provider = MAP_PROVIDERS[styleKey];
-      const urlFn = isOverlay ? provider.overlayUrl : provider.url;
-      if (!urlFn) return null;
-
-      const entry = { img: null, status: 'loading', promise: null };
-      entry.promise = new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.referrerPolicy = 'strict-origin-when-cross-origin';
-        img.onload = () => {
-          if (!isOverlay && styleKey === 'osm' && isOsmBlockedTile(img)) {
-            if (!osmBlockedNotified) {
-              osmBlockedNotified = true;
-              statusText.textContent = tr().statusOsmBlocked;
-            }
-          }
-          entry.img = img;
-          entry.status = 'ok';
-          resolve(entry);
-        };
-        img.onerror = () => { entry.status = 'error'; resolve(entry); };
-        img.src = urlFn(z, wx, ty);
-      });
-
-      tileCache.set(key, entry);
-      return entry;
-    }
-
-    function getVisibleTilesForCamera(cam, mapW, mapH) {
-      const styleKey = inMapStyle.value;
-      const maxZ = MAP_PROVIDERS[styleKey].maxZ;
-      const tileZ = Math.max(2, Math.min(maxZ, Math.round(cam.z)));
-      const nTiles = 1 << tileZ;
-      const pxScale = Math.pow(2, cam.z) * 256;
-
-      const halfWx = (mapW / 2) / pxScale;
-      const halfWy = (mapH / 2) / pxScale;
-      const tx0 = Math.floor((cam.wx - halfWx) * nTiles) - 1;
-      const tx1 = Math.floor((cam.wx + halfWx) * nTiles) + 1;
-      const ty0 = Math.max(0, Math.floor((cam.wy - halfWy) * nTiles) - 1);
-      const ty1 = Math.min(nTiles - 1, Math.floor((cam.wy + halfWy) * nTiles) + 1);
-
-      const list = [];
-      for (let ty = ty0; ty <= ty1; ty++) {
-        for (let tx = tx0; tx <= tx1; tx++) {
-          list.push({ styleKey, tileZ, tx, ty });
-        }
-      }
-      return list;
-    }
-
-    async function preloadTiles() {
-      syncDarkModeVisibility();
-      const active = getActiveSlots();
-      if (!active.length) return [];
-      const provider = MAP_PROVIDERS[inMapStyle.value];
-
-      if (provider.isVector) {
-        const m = ensureDarkModeMap();
-        if (!m) return [];
-        const [lon, lat] = worldToLonLat(overviewCam.wx, overviewCam.wy);
-        m.jumpTo({ center: [lon, lat], zoom: Math.max(1, overviewCam.z - 1), animate: false });
-        return new Promise((resolve) => {
-          if (mlReady && m.areTilesLoaded()) { resolve(); return; }
-          m.once('idle', resolve);
-          setTimeout(resolve, 3500);
-        });
-      }
-
-      const { mapW, mapH } = getMapViewport();
-      const promises = [];
-      for (const t of getVisibleTilesForCamera(overviewCam, mapW, mapH)) {
-        const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
-        if (entry && entry.status === 'loading') promises.push(entry.promise);
-        if (provider.overlayUrl) {
-          const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
-          if (ov && ov.status === 'loading') promises.push(ov.promise);
-        }
-      }
-      return Promise.all(promises);
-    }
-
-    function easeInOutCubic(x) {
-      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    }
-    function lerp(a, b, t) { return a + (b - a) * t; }
-
-    function getTrackStateAtSimTime(trk, currentSimMs) {
-      const pts = trk.pts;
-      if (currentSimMs <= trk.simStartMs) {
-        return {
-          status: 'waiting',
-          progress: 0,
-          wx: pts[0].wx,
-          wy: pts[0].wy,
-          ele: pts[0].smoothEle ?? 0,
-          km: 0,
-          idx: 0
-        };
-      }
-      if (currentSimMs >= trk.simEndMs) {
-        const last = pts[pts.length - 1];
-        return {
-          status: 'finished',
-          progress: 1,
-          wx: last.wx,
-          wy: last.wy,
-          ele: last.smoothEle ?? 0,
-          km: trk.totalKm,
-          idx: pts.length - 1
-        };
-      }
-
-      const relTarget = currentSimMs - trk.simStartMs;
-      let lo = 0, hi = pts.length - 1;
-      while (lo < hi - 1) {
-        const mid = (lo + hi) >> 1;
-        if (pts[mid].relMs <= relTarget) lo = mid;
-        else hi = mid;
-      }
-      const a = pts[lo], b = pts[hi];
-      const span = (b.relMs - a.relMs) || 1;
-      const f = (relTarget - a.relMs) / span;
-      return {
-        status: 'riding',
-        progress: relTarget / trk.durationMs,
-        wx: a.wx + (b.wx - a.wx) * f,
-        wy: a.wy + (b.wy - a.wy) * f,
-        ele: (a.smoothEle ?? 0) + ((b.smoothEle ?? 0) - (a.smoothEle ?? 0)) * f,
-        km: a.km + (b.km - a.km) * f,
-        idx: hi
-      };
-    }
-
-    function getCameraAtTime(globalT) {
-      const intro = Math.min(1, globalT / 0.15);
-      const outro = Math.max(0, (globalT - 0.88) / 0.12);
-      const zBoost = easeInOutCubic(intro) * 0.06 - easeInOutCubic(outro) * 0.06;
-      return { wx: overviewCam.wx, wy: overviewCam.wy, z: overviewCam.z + zBoost };
-    }
-
-    function getDotAlpha(trackProgress, status) {
-      if (status === 'waiting' || status === 'finished') return 0.50;
-      if (trackProgress <= 0.08) return 0.50;
-      if (trackProgress < 0.18) return lerp(0.50, 1.00, easeInOutCubic((trackProgress - 0.08) / 0.10));
-      if (trackProgress <= 0.82) return 1.00;
-      if (trackProgress < 0.92) return lerp(1.00, 0.50, easeInOutCubic((trackProgress - 0.82) / 0.10));
-      return 0.50;
-    }
-
-    function drawMovingDot(bx, by, unitSize, colorObj, alpha, pulsePhase) {
-      const r = unitSize * 0.0088;
-      const half = dotLayer.width / 2;
-
-      dotCtx.clearRect(0, 0, dotLayer.width, dotLayer.height);
-      dotCtx.save();
-
-      const ringR = r * (1.35 + 0.5 * pulsePhase);
-      dotCtx.beginPath();
-      dotCtx.arc(half, half, ringR, 0, Math.PI * 2);
-      dotCtx.strokeStyle = colorObj.hex;
-      dotCtx.lineWidth = 2;
-      dotCtx.globalAlpha = 0.55 * (1 - pulsePhase);
-      dotCtx.stroke();
-      dotCtx.globalAlpha = 1;
-
-      dotCtx.shadowColor = colorObj.hex;
-      dotCtx.shadowBlur = 12;
-      dotCtx.fillStyle = colorObj.hex;
-      dotCtx.beginPath();
-      dotCtx.arc(half, half, r, 0, Math.PI * 2);
-      dotCtx.fill();
-
-      dotCtx.shadowBlur = 0;
-      dotCtx.lineWidth = 2.4;
-      dotCtx.strokeStyle = '#ffffff';
-      dotCtx.stroke();
-      dotCtx.restore();
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(dotLayer, bx - half, by - half);
-      ctx.restore();
-    }
-
-    function drawFloatingPill(x, y, offsetY, unitSize, mapY, mapW, mapH, borderColor, text, isSubtle = false) {
-      const clean = (text || '').trim();
-      if (!clean) return;
-      const fontSize = Math.max(11, Math.round(unitSize * (isSubtle ? 0.0076 : 0.0082)));
-
-      ctx.save();
-      ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
-
-      let shown = clean;
-      const maxW = unitSize * 0.14;
-      while (ctx.measureText(shown).width > maxW && shown.length > 3) {
-        shown = shown.slice(0, -2) + '…';
-      }
-
-      const padX = 7;
-      const pillH = fontSize + 7;
-      const pillW = ctx.measureText(shown).width + padX * 2;
-
-      let lx = x - pillW / 2;
-      lx = Math.max(6, Math.min(mapW - pillW - 6, lx));
-
-      let ly = y - offsetY - pillH;
-      if (ly < mapY + 6) ly = Math.min(mapY + mapH - pillH - 6, y + offsetY);
-
-      ctx.fillStyle = isSubtle ? 'rgba(11, 19, 17, 0.78)' : 'rgba(11, 19, 17, 0.88)';
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.roundRect(lx, ly, pillW, pillH, 6);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(shown, lx + pillW / 2, ly + pillH / 2 + 0.5);
-      ctx.restore();
-    }
-
-    function drawPoiMarker(x, y, unitSize, poi, poiScale = 1) {
-      const r = unitSize * 0.0082 * poiScale;
-      const hex = poi.color.hex;
-      const outline = poi.color.key === 'white' ? '#111827' : '#ffffff';
-
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = hex;
-      ctx.strokeStyle = outline;
-      ctx.lineWidth = Math.max(1.5, 2 * Math.sqrt(poiScale));
-
-      if (poi.icon === 'diamond') {
-        ctx.beginPath();
-        ctx.moveTo(x, y - r * 1.15);
-        ctx.lineTo(x + r * 1.15, y);
-        ctx.lineTo(x, y + r * 1.15);
-        ctx.lineTo(x - r * 1.15, y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.stroke();
-      } else if (poi.icon === 'pin') {
-        const pr = r * 1.05;
-        ctx.beginPath();
-        ctx.arc(x, y - pr * 1.2, pr, Math.PI * 0.8, Math.PI * 0.2, false);
-        ctx.lineTo(x, y);
-        ctx.closePath();
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.stroke();
-        ctx.fillStyle = outline;
-        ctx.beginPath();
-        ctx.arc(x, y - pr * 1.2, pr * 0.34, 0, Math.PI * 2);
-        ctx.fill();
-      } else if (poi.icon === 'flag') {
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = outline;
-        ctx.lineWidth = Math.max(1.6, 2.4 * Math.sqrt(poiScale));
-        ctx.beginPath();
-        ctx.moveTo(x, y + r * 0.4);
-        ctx.lineTo(x, y - r * 2.1);
-        ctx.stroke();
-
-        ctx.fillStyle = hex;
-        ctx.beginPath();
-        ctx.moveTo(x, y - r * 2.1);
-        ctx.lineTo(x + r * 1.8, y - r * 1.5);
-        ctx.lineTo(x, y - r * 0.9);
-        ctx.closePath();
-        ctx.fill();
-        ctx.lineWidth = Math.max(1.2, 1.4 * Math.sqrt(poiScale));
-        ctx.stroke();
-      } else if (poi.icon === 'target') {
-        ctx.beginPath();
-        ctx.arc(x, y, r * 1.05, 0, Math.PI * 2);
-        ctx.strokeStyle = hex;
-        ctx.lineWidth = Math.max(1.6, 2.4 * Math.sqrt(poiScale));
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = outline;
-        ctx.lineWidth = Math.max(1.2, 1.4 * Math.sqrt(poiScale));
-        ctx.beginPath();
-        ctx.moveTo(x - r * 1.4, y); ctx.lineTo(x - r * 0.5, y);
-        ctx.moveTo(x + r * 0.5, y); ctx.lineTo(x + r * 1.4, y);
-        ctx.moveTo(x, y - r * 1.4); ctx.lineTo(x, y - r * 0.5);
-        ctx.moveTo(x, y + r * 0.5); ctx.lineTo(x, y + r * 1.4);
-        ctx.stroke();
-        ctx.fillStyle = hex;
-        ctx.beginPath();
-        ctx.arc(x, y, r * 0.35, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.beginPath();
-        ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-
-    function drawPin(x, y, unitSize, colorHex, label) {
-      const r = unitSize * 0.0068;
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
-      ctx.shadowBlur = 6;
-      ctx.fillStyle = colorHex;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = 1.8;
-      ctx.strokeStyle = '#ffffff';
-      ctx.stroke();
-      if (label) {
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `800 ${Math.round(r * 1.1)}px Inter, system-ui, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, x, y + 0.5);
-      }
-      ctx.restore();
-    }
-
-    function renderFrame(elapsedMs) {
-      const vp = getMapViewport();
-      const { W, H, unitSize, isPortrait, mapY, mapW, mapH, topHudH, elevH, showElev, showLegend } = vp;
-      const active = getActiveSlots();
-      const dur = getDurationMs();
-      const globalT = Math.min(1, elapsedMs / dur);
-      const rideT = Math.max(0, Math.min(1, (globalT - 0.08) / 0.84));
-      const currentSimMs = globalStartMs + rideT * globalSpanMs;
-      const pulsePhase = isPaused ? 0 : (elapsedMs % 1400) / 1400;
-
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = '#182028';
-      ctx.fillRect(0, 0, W, H);
-
-      if (!active.length) return;
-
-      const cam = getCameraAtTime(globalT);
-      lastCam = cam;
-      const styleKey = inMapStyle.value;
-      const provider = MAP_PROVIDERS[styleKey];
-      const pxScale = Math.pow(2, cam.z) * 256;
-
-      const worldToScreen = (wx, wy) => ({
-        x: mapW / 2 + (wx - cam.wx) * pxScale,
-        y: mapY + mapH / 2 + (wy - cam.wy) * pxScale
-      });
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, mapY, mapW, mapH);
-      ctx.clip();
-
-      if (provider.isVector) {
-        const m = ensureDarkModeMap();
-        if (m) {
-          const [lon, lat] = worldToLonLat(cam.wx, cam.wy);
-          m.jumpTo({ center: [lon, lat], zoom: Math.max(1, cam.z - 1), animate: false });
-          ctx.drawImage(m.getCanvas(), 0, mapY, mapW, mapH);
-        }
-      } else {
-        const tileZ = Math.max(2, Math.min(provider.maxZ, Math.round(cam.z)));
-        const nTiles = 1 << tileZ;
-        const tileScreenSize = Math.pow(2, cam.z - tileZ) * 256;
-        const tiles = getVisibleTilesForCamera(cam, mapW, mapH);
-
-        for (const t of tiles) {
-          const entry = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, false);
-          const sx = mapW / 2 + (t.tx / nTiles - cam.wx) * pxScale;
-          const sy = mapY + mapH / 2 + (t.ty / nTiles - cam.wy) * pxScale;
-          if (entry && entry.status === 'ok' && entry.img) {
-            ctx.drawImage(entry.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
-            if (provider.overlayUrl) {
-              const ov = requestTile(t.styleKey, t.tileZ, t.tx, t.ty, true);
-              if (ov && ov.status === 'ok' && ov.img) {
-                ctx.save();
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.globalAlpha = 0.72;
-                ctx.drawImage(ov.img, sx, sy, tileScreenSize + 0.7, tileScreenSize + 0.7);
-                ctx.restore();
-              }
-            }
-          } else {
-            ctx.fillStyle = '#182622';
-            ctx.fillRect(sx, sy, tileScreenSize + 0.5, tileScreenSize + 0.5);
-            ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-            ctx.strokeRect(sx, sy, tileScreenSize, tileScreenSize);
-          }
-        }
-      }
-
-      const states = active.map((slot) => ({
-        slot,
-        st: getTrackStateAtSimTime(slot.track, currentSimMs)
-      }));
-
-      for (const { slot, st } of states) {
-        const trk = slot.track;
-        const col = slot.color;
-
-        if (st.progress > 0) {
-          ctx.save();
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.shadowColor = col.hex;
-          ctx.shadowBlur = 10;
-          ctx.strokeStyle = col.hex;
-          ctx.lineWidth = unitSize * 0.0036;
-          ctx.beginPath();
-          const p0 = worldToScreen(trk.pts[0].wx, trk.pts[0].wy);
-          ctx.moveTo(p0.x, p0.y);
-          for (let i = 1; i < st.idx; i++) {
-            const sp = worldToScreen(trk.pts[i].wx, trk.pts[i].wy);
-            ctx.lineTo(sp.x, sp.y);
-          }
-          const curSp = worldToScreen(st.wx, st.wy);
-          ctx.lineTo(curSp.x, curSp.y);
-          ctx.stroke();
-
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = col.core;
-          ctx.lineWidth = unitSize * 0.0012;
-          ctx.stroke();
-          ctx.restore();
-        }
-
-        const startSp = worldToScreen(trk.pts[0].wx, trk.pts[0].wy);
-        drawPin(startSp.x, startSp.y, unitSize, col.hex, null);
-
-        if (!trk.isLoop && st.status === 'finished') {
-          const endSp = worldToScreen(trk.pts[trk.pts.length - 1].wx, trk.pts[trk.pts.length - 1].wy);
-          drawPin(endSp.x, endSp.y, unitSize, col.hex, 'M');
-        }
-      }
-
-      const showPois = inShowPoi.checked;
-      const showPoiLabels = inShowPoiLabels.checked;
-      const poiScale = parseFloat(inPoiScale.value) || 1;
-      if (showPois && pois.length > 0) {
-        for (const poi of pois) {
-          const psp = worldToScreen(poi.wx, poi.wy);
-          drawPoiMarker(psp.x, psp.y, unitSize, poi, poiScale);
-          if (showPoiLabels) {
-            const baseOff = (poi.icon === 'pin' || poi.icon === 'flag') ? unitSize * 0.022 : unitSize * 0.013;
-            drawFloatingPill(psp.x, psp.y, baseOff * poiScale, unitSize, mapY, mapW, mapH, poi.color.hex, poi.name, true);
-          }
-        }
-      }
-
-      for (const { slot, st } of states) {
-        const dotSp = worldToScreen(st.wx, st.wy);
-        const alpha = getDotAlpha(st.progress, st.status);
-        drawMovingDot(dotSp.x, dotSp.y, unitSize, slot.color, alpha, pulsePhase);
-      }
-      for (const { slot, st } of states) {
-        const dotSp = worldToScreen(st.wx, st.wy);
-        drawFloatingPill(dotSp.x, dotSp.y, unitSize * 0.014, unitSize, mapY, mapW, mapH, slot.color.hex, slot.track.name, false);
-      }
-
-      ctx.save();
-      ctx.font = `600 ${Math.round(unitSize * 0.0075)}px Inter, system-ui, sans-serif`;
-      const attrW = ctx.measureText(provider.attr).width + 14;
-      ctx.fillStyle = styleKey === 'dark_mode' ? 'rgba(15,23,34,0.78)' : 'rgba(255,255,255,0.78)';
-      ctx.fillRect(mapW - attrW, mapY + mapH - 20, attrW, 20);
-      ctx.fillStyle = styleKey === 'dark_mode' ? '#cbd5e1' : '#111827';
-      ctx.fillText(provider.attr, mapW - attrW + 7, mapY + mapH - 6);
-      ctx.restore();
-
-      ctx.restore();
-
-      if (showElev && elevH > 0) {
-        const py0 = mapY + mapH;
-        ctx.save();
-        ctx.fillStyle = '#0d1714';
-        ctx.fillRect(0, py0, W, elevH);
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, py0);
-        ctx.lineTo(W, py0);
-        ctx.stroke();
-
-        const padL = W * 0.055;
-        const padR = W * 0.025;
-        const padT = elevH * 0.16;
-        const padB = elevH * 0.18;
-        const plotW = W - padL - padR;
-        const plotH = elevH - padT - padB;
-        const plotY0 = py0 + padT;
-        const plotY1 = py0 + padT + plotH;
-
-        const step = Math.max(10, Math.ceil((globalMaxEle - globalMinEle) / 4 / 25) * 25);
-        const yMinTick = Math.max(0, Math.floor(globalMinEle / step) * step);
-        const yMaxTick = Math.max(yMinTick + step, Math.ceil(globalMaxEle / step) * step);
-
-        const eleToY = (e) => plotY1 - ((e - yMinTick) / (yMaxTick - yMinTick)) * plotH;
-        const kmToX = (km) => padL + (km / globalMaxKm) * plotW;
-
-        ctx.font = `600 ${Math.round(unitSize * 0.0072)}px Inter, system-ui, sans-serif`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        for (let v = yMinTick; v <= yMaxTick; v += step) {
-          const gy = eleToY(v);
-          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-          ctx.beginPath();
-          ctx.moveTo(padL, gy);
-          ctx.lineTo(W - padR, gy);
-          ctx.stroke();
-          ctx.fillStyle = '#94a8a0';
-          ctx.fillText(`${v}m`, padL - 8, gy);
-        }
-
-        for (const { slot, st } of states) {
-          const trk = slot.track;
-          if (!trk.hasEle || st.progress <= 0) continue;
-          const col = slot.color;
-          const curX = kmToX(st.km);
-          const curY = eleToY(st.ele);
-
-          const grad = ctx.createLinearGradient(0, plotY0, 0, plotY1);
-          grad.addColorStop(0, `${col.hex}42`);
-          grad.addColorStop(1, `${col.hex}08`);
-
-          ctx.beginPath();
-          ctx.moveTo(kmToX(0), plotY1);
-          for (let i = 0; i < st.idx; i++) {
-            ctx.lineTo(kmToX(trk.pts[i].km), eleToY(trk.pts[i].smoothEle));
-          }
-          ctx.lineTo(curX, curY);
-          ctx.lineTo(curX, plotY1);
-          ctx.closePath();
-          ctx.fillStyle = grad;
-          ctx.fill();
-
-          ctx.beginPath();
-          ctx.moveTo(kmToX(0), eleToY(trk.pts[0].smoothEle));
-          for (let i = 1; i < st.idx; i++) {
-            ctx.lineTo(kmToX(trk.pts[i].km), eleToY(trk.pts[i].smoothEle));
-          }
-          ctx.lineTo(curX, curY);
-          ctx.strokeStyle = col.hex;
-          ctx.lineWidth = 2.6;
-          ctx.stroke();
-
-          ctx.fillStyle = col.hex;
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(curX, curY, 4.8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        if (showPois && inShowPoiOnElev.checked && pois.length > 0) {
-          const elevDotR = 4.5 * Math.min(1.6, Math.max(0.7, poiScale));
-          for (const poi of pois) {
-            for (const m of poi.trackMatches) {
-              const found = states.find((s) => s.slot === m.slot);
-              if (!found || found.st.km < m.km) continue;
-              const px = kmToX(m.km);
-              const py = eleToY(m.ele);
-
-              ctx.save();
-              ctx.strokeStyle = `${poi.color.hex}88`;
-              ctx.lineWidth = 1.4;
-              ctx.setLineDash([3, 3]);
-              ctx.beginPath();
-              ctx.moveTo(px, plotY0);
-              ctx.lineTo(px, py);
-              ctx.stroke();
-              ctx.setLineDash([]);
-
-              ctx.fillStyle = poi.color.hex;
-              ctx.strokeStyle = '#ffffff';
-              ctx.lineWidth = 1.8;
-              ctx.beginPath();
-              ctx.arc(px, py, elevDotR, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-
-              if (showPoiLabels) {
-                const lbl = (poi.name || '').trim().slice(0, 14);
-                if (lbl) {
-                  ctx.font = `700 ${Math.max(9, Math.round(unitSize * 0.0062))}px Inter, system-ui, sans-serif`;
-                  ctx.fillStyle = '#e2e8f0';
-                  ctx.textAlign = 'center';
-                  ctx.textBaseline = 'bottom';
-                  ctx.fillText(lbl, px, plotY0 - 2);
-                }
-              }
-              ctx.restore();
-            }
-          }
-        }
-
-        ctx.fillStyle = '#94a8a0';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        for (let k = 0; k <= 4; k++) {
-          const frac = k / 4;
-          const kmVal = frac * globalMaxKm;
-          ctx.fillText(`${kmVal.toFixed(globalMaxKm >= 20 ? 0 : 1)} km`, kmToX(kmVal), plotY1 + 6);
-        }
-
-        ctx.restore();
-      }
-
-      if (showLegend) {
-        if (isPortrait) {
-          drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states);
-        } else {
-          drawMultiHUD(W, unitSize, globalT, currentSimMs, states);
-        }
-      }
-    }
-
-    function drawPortraitTopLegend(W, topHudH, unitSize, currentSimMs, states) {
-      const t = tr();
-      const cols = states.length >= 4 ? 2 : 1;
-      const headerH = Math.round(unitSize * 0.022);
-      const rowH = Math.round(unitSize * 0.021);
-      const colW = (W - 36) / cols;
-
-      ctx.save();
-      ctx.fillStyle = '#0d1714';
-      ctx.fillRect(0, 0, W, topHudH);
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, topHudH);
-      ctx.lineTo(W, topHudH);
-      ctx.stroke();
-
-      let clockTxt = '';
-      if (useClockLabels === 'epoch') clockTxt = `${t.hudHour}: ${formatClockHHMM(currentSimMs)}`;
-      else if (useClockLabels === 'timeOfDay') clockTxt = `${t.hudHour}: ${formatMsOfDayHHMM(currentSimMs)}`;
-      else clockTxt = `${t.hudElapsed}: ${formatClockHHMM(currentSimMs - globalStartMs, true)}`;
-
-      ctx.fillStyle = '#94a8a0';
-      ctx.font = `700 ${Math.round(unitSize * 0.0085)}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(clockTxt, 18, headerH * 0.65);
-
-      const fontSize = Math.round(unitSize * 0.0082);
-      states.forEach(({ slot, st }, idx) => {
-        const colIdx = idx % cols;
-        const rowIdx = Math.floor(idx / cols);
-        const rx = 18 + colIdx * colW;
-        const ry = headerH + rowIdx * rowH + rowH * 0.55;
-        const trk = slot.track;
-
-        ctx.fillStyle = slot.color.hex;
-        ctx.beginPath();
-        ctx.arc(rx + 6, ry, 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        const eleTxt = trk.hasEle ? ` • ${Math.round(st.ele)}m` : '';
-        const statusTag = st.status === 'finished' ? ' ✓' : '';
-        const rightStr = `${st.km.toFixed(1)}/${trk.totalKm.toFixed(1)} km${eleTxt}${statusTag}`;
-
-        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
-        const rightW = ctx.measureText(rightStr).width;
-        const maxNameW = colW - rightW - 34;
-
-        let nm = (trk.name || `Track #${idx + 1}`).trim();
-        while (ctx.measureText(nm).width > maxNameW && nm.length > 3) {
-          nm = nm.slice(0, -2) + '…';
-        }
-
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
-        ctx.fillText(nm, rx + 18, ry);
-
-        ctx.fillStyle = st.status === 'finished' ? '#4ade80' : '#cbd5e1';
-        ctx.textAlign = 'right';
-        ctx.fillText(rightStr, rx + colW - 10, ry);
-      });
-
-      ctx.restore();
-    }
-
-    function drawMultiHUD(W, unitSize, globalT, currentSimMs, states) {
-      const t = tr();
-      const { pad, boxW, boxH, headerH, rowH, compact } = getFloatingHudDimensions(W, unitSize, states.length);
-      const bx = W - boxW - pad;
-      const by = pad;
-
-      const alpha = Math.min(1, globalT / 0.08);
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      ctx.fillStyle = 'rgba(13, 25, 21, 0.88)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.roundRect(bx, by, boxW, boxH, 13);
-      ctx.fill();
-      ctx.stroke();
-
-      let clockTxt = '';
-      if (useClockLabels === 'epoch') clockTxt = `${t.hudHour}: ${formatClockHHMM(currentSimMs)}`;
-      else if (useClockLabels === 'timeOfDay') clockTxt = `${t.hudHour}: ${formatMsOfDayHHMM(currentSimMs)}`;
-      else clockTxt = `${t.hudElapsed}: ${formatClockHHMM(currentSimMs - globalStartMs, true)}`;
-
-      ctx.fillStyle = '#94a8a0';
-      ctx.font = `700 ${Math.round(unitSize * (compact ? 0.0078 : 0.0085))}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(clockTxt, bx + 13, by + headerH * 0.62);
-
-      const fontSize = Math.round(unitSize * (compact ? 0.0078 : 0.009));
-      states.forEach(({ slot, st }, idx) => {
-        const ry = by + headerH + idx * rowH + rowH * 0.5;
-        const trk = slot.track;
-
-        ctx.fillStyle = slot.color.hex;
-        ctx.beginPath();
-        ctx.arc(bx + 17, ry, compact ? 4 : 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
-        const maxNameW = boxW * 0.43;
-        let nm = (trk.name || `Track #${idx + 1}`).trim();
-        while (ctx.measureText(nm).width > maxNameW && nm.length > 3) {
-          nm = nm.slice(0, -2) + '…';
-        }
-        ctx.textAlign = 'left';
-        ctx.fillText(nm, bx + 28, ry);
-
-        ctx.textAlign = 'right';
-        ctx.fillStyle = st.status === 'finished' ? '#4ade80' : '#e2e8f0';
-        ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
-        const eleTxt = trk.hasEle ? ` • ${Math.round(st.ele)}m` : '';
-        const statusTag = st.status === 'waiting' ? t.hudWait : (st.status === 'finished' ? ' ✓' : '');
-        ctx.fillText(`${st.km.toFixed(1)}/${trk.totalKm.toFixed(1)} km${eleTxt}${statusTag}`, bx + boxW - 13, ry);
-      });
-
-      ctx.restore();
-    }
-
-    function updateStatusLine() {
-      const active = getActiveSlots();
-      const t = tr();
-      if (!active.length) {
-        statusText.textContent = t.statusInit;
-        return;
-      }
-      const poiTxt = pois.length ? ` • ${pois.length} POI` : '';
-      statusText.textContent = t.statusLoaded(active.length, poiTxt, globalMaxKm.toFixed(1));
-    }
-
-    function loop(ts) {
-      if (!startTime) startTime = ts;
-      const dur = getDurationMs();
-      let elapsed;
-      if (isRecording) {
-        elapsed = Math.min(dur, ts - startTime);
-      } else if (isPaused) {
-        elapsed = pausedElapsed;
-      } else {
-        elapsed = (ts - startTime) % (dur + 1200);
-      }
-      lastElapsed = Math.min(elapsed, dur);
-      renderFrame(lastElapsed);
-      rafId = requestAnimationFrame(loop);
-    }
-
-    function startAnimation() {
-      if (rafId) cancelAnimationFrame(rafId);
-      isPaused = false;
-      pausedElapsed = 0;
-      lastElapsed = 0;
-      updatePauseBtnUI();
-      startTime = null;
-      rafId = requestAnimationFrame(loop);
-    }
-
-    pauseBtn.addEventListener('click', () => {
-      if (!getActiveSlots().length || isRecording) return;
-      if (!isPaused) {
-        isPaused = true;
-        pausedElapsed = lastElapsed;
-      } else {
-        isPaused = false;
-        startTime = performance.now() - pausedElapsed;
-      }
-      updatePauseBtnUI();
-    });
-
-    canvas.addEventListener('click', (e) => {
-      if (!mapPickMode || !getActiveSlots().length) return;
-      const rect = canvas.getBoundingClientRect();
-      const cx = ((e.clientX - rect.left) / rect.width) * canvas.width;
-      const cy = ((e.clientY - rect.top) / rect.height) * canvas.height;
-      const { mapY, mapW, mapH } = getMapViewport();
-      if (cx < 0 || cx > mapW || cy < mapY || cy > mapY + mapH) return;
-
-      const pxScale = Math.pow(2, lastCam.z) * 256;
-      const wx = lastCam.wx + (cx - mapW / 2) / pxScale;
-      const wy = lastCam.wy + (cy - (mapY + mapH / 2)) / pxScale;
-      const [lon, lat] = worldToLonLat(wx, wy);
-
-      if (mapPickMode === 'add') {
-        addPoiItem({ name: `POI #${pois.length + 1}`, lat, lon });
-        updateStatusLine();
-      } else if (typeof mapPickMode === 'number') {
-        const poi = pois.find((p) => p.id === mapPickMode);
-        if (poi) {
-          poi.lat = lat;
-          poi.lon = lon;
-          poi.wx = wx;
-          poi.wy = wy;
-          syncPoisWithTracks();
-        }
-        setPickMode(null);
-      }
-    });
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && mapPickMode !== null) setPickMode(null);
-    });
-
-    inPoiScale.addEventListener('input', () => {
-      const pct = Math.round((parseFloat(inPoiScale.value) || 1) * 100);
-      poiScaleVal.textContent = `${pct}%`;
-    });
-
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files.length) loadFilesIntoSlots(e.target.files, null);
-      fileInput.value = '';
-    });
-
-    slotFileInput.addEventListener('change', (e) => {
-      if (e.target.files[0]) loadFilesIntoSlots([e.target.files[0]], pendingSlotIndex);
-    });
-
-    dropOverlay.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => e.preventDefault());
-    dropZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (e.dataTransfer.files.length) loadFilesIntoSlots(e.dataTransfer.files, null);
-    });
-
-    inTimeSync.addEventListener('change', () => {
-      if (getActiveSlots().length) {
-        recomputeGlobalTimeline();
-        startAnimation();
-      }
-    });
-
-    inShowElev.addEventListener('change', () => {
-      if (getActiveSlots().length) {
-        computeOverviewCamera();
-        preloadTiles();
-        if (!isPaused) startAnimation();
-      } else {
-        syncDarkModeVisibility();
-      }
-    });
-
-    inShowLegend.addEventListener('change', () => {
-      if (getActiveSlots().length) {
-        computeOverviewCamera();
-        preloadTiles();
-        if (!isPaused) startAnimation();
-      } else {
-        syncDarkModeVisibility();
-      }
-    });
-
-    inAspect.addEventListener('change', () => {
-      const [w, h] = inAspect.value.split('x').map(Number);
-      canvas.width = w;
-      canvas.height = h;
-      if (getActiveSlots().length) {
-        computeOverviewCamera();
-        preloadTiles();
-        if (!isPaused) startAnimation();
-      }
-    });
-
-    inMapStyle.addEventListener('change', () => {
-      osmBlockedNotified = false;
-      if (getActiveSlots().length) {
-        computeOverviewCamera();
-        preloadTiles();
-        updateStatusLine();
-      } else {
-        syncDarkModeVisibility();
-      }
-    });
-
-    inDuration.addEventListener('change', () => {
-      const v = parseFloat(inDuration.value);
-      if (isNaN(v) || v < 1) inDuration.value = 1;
-      if (getActiveSlots().length) startAnimation();
-    });
-
-    recordBtn.addEventListener('click', async () => {
-      if (!getActiveSlots().length || isRecording) return;
-      setPickMode(null);
-
-      // Wideo zawsze nagrywa pełny przejazd od początku do końca (ignoruje pauzę podglądu)
-      isPaused = false;
-      updatePauseBtnUI();
-
-      const t = tr();
-      isRecording = true;
-      recordBtn.disabled = true;
-      pauseBtn.disabled = true;
-      recordBtn.textContent = t.recFetch;
-      statusText.textContent = t.recPrep;
-
-      await Promise.race([
-        preloadTiles(),
-        new Promise((res) => setTimeout(res, 3500))
-      ]);
-
-      const dur = getDurationMs();
-      const mimeCandidates = [
-        'video/mp4;codecs=avc1',
-        'video/mp4',
-        'video/webm;codecs=vp9',
-        'video/webm;codecs=vp8',
-        'video/webm'
-      ];
-      const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || '';
-      const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-
-      const stream = canvas.captureStream(60);
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 7000000 } : {});
-      const chunks = [];
-
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      recorder.onstop = () => {
-        isRecording = false;
-        const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `gpx-alive-animation.${ext}`;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        recordBtn.disabled = false;
-        pauseBtn.disabled = false;
-        recordBtn.textContent = tr().btnGenerate;
-        updateStatusLine();
-        startAnimation();
-      };
-
-      startAnimation();
-      recorder.start();
-
-      const t0 = performance.now();
-      const progressTimer = setInterval(() => {
-        const pct = Math.min(100, Math.round(((performance.now() - t0) / dur) * 100));
-        recordBtn.textContent = tr().recProg(pct);
-        statusText.textContent = tr().recStatus(pct);
-      }, 200);
-
-      setTimeout(() => {
-        clearInterval(progressTimer);
-        if (recorder.state === 'recording') recorder.stop();
-      }, dur + 500);
-    });
-
-    applyLanguage(currentLang);
-  </script>
-</body>
-</html>
